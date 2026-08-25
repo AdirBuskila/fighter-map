@@ -3,6 +3,7 @@
 import { MarkerClusterer, type Marker } from "@googlemaps/markerclusterer";
 import {
   AdvancedMarker,
+  ColorScheme,
   Map,
   useMap,
 } from "@vis.gl/react-google-maps";
@@ -34,6 +35,13 @@ export default function MapView(props: Props) {
       gestureHandling="greedy"
       disableDefaultUI
       zoomControl
+      // Stock Google is the most generic surface in this app. The basemap
+      // styles in design/ strip it back to coastline, road network and town
+      // names, so the only colour on the map is the dots. Those live on the
+      // Map ID in the cloud console; this makes the basemap follow the same
+      // light or dark choice as the page around it.
+      colorScheme={ColorScheme.FOLLOW_SYSTEM}
+      // Google's own POI pins are not our data and compete with it.
       clickableIcons={false}
       className="h-full w-full"
     >

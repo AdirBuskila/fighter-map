@@ -60,7 +60,7 @@ export default function PlaceList({
               if (node) rowRefs.current.set(place.id, node);
               else rowRefs.current.delete(place.id);
             }}
-            className={selected ? "bg-fighter-tint" : undefined}
+            className={selected ? "selected-panel" : undefined}
           >
             <div
               role="button"
@@ -75,9 +75,13 @@ export default function PlaceList({
               }}
               className="w-full cursor-pointer px-3 pb-3 pt-3 text-right"
             >
-              <div className="flex items-baseline gap-2">
+              {/* Destination on the right, distance in its own column on the
+                  left, exactly as a road sign sets them. The column is a fixed
+                  width with tabular figures so the numbers line up down the
+                  list and the eye can scan them without reading each row. */}
+              <div className="flex items-baseline gap-3">
                 <h3
-                  className={`font-extrabold ${
+                  className={`min-w-0 flex-1 font-extrabold ${
                     place.status === "reported_not_working"
                       ? "text-ink-soft line-through decoration-1"
                       : ""
@@ -87,10 +91,7 @@ export default function PlaceList({
                   {place.name_he}
                 </h3>
                 {place.distance_m != null && (
-                  <span
-                    className="mr-auto shrink-0 tabular-nums text-ink-soft"
-                    style={{ fontSize: "var(--text-xs)" }}
-                  >
+                  <span className="distance-column">
                     {formatDistance(place.distance_m)}
                   </span>
                 )}

@@ -329,6 +329,37 @@ label.tap {
   transform: rotate(45deg);
 }
 
+/* A road sign sets distances in a fixed column on the far side of the panel,
+   separated by a rule, never inline with the destination. Same job here: the
+   figures align down the list so a reader can compare them at a glance. */
+.distance-column {
+  flex: none;
+  width: 4.5rem;
+  border-inline-start: 1px solid var(--line);
+  padding-inline-start: 0.5rem;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: start;
+}
+
+/* The keyline. A white rule inset from the edge of the coloured panel is the
+   one device that says "road sign" more than any colour does, and it was the
+   thing most obviously missing. It marks the row you have chosen. */
+.selected-panel {
+  position: relative;
+  background: var(--fighter-tint);
+}
+.selected-panel::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid var(--fighter);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .field {
   width: 100%;
   min-height: 48px;

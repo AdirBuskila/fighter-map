@@ -46,6 +46,13 @@ JavaScript / vector renderer, and put it in
 `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Advanced markers do not render without one;
 the app falls back to `DEMO_MAP_ID`, which is watermarked.
 
+While you are in there, import the two basemap styles from `design/` and
+associate them with that Map ID. They strip Google's POI pins, transit lines
+and road labels so the only colour on the map is our own dots, which is what
+makes the two benefit colours readable at 10px. `design/README.md` has the
+steps and the reasoning. The map works without them; it just looks like
+everyone else's.
+
 Set a **budget alert** before you run the geocoder. It makes exactly 610 Text
 Search calls on the first pass and zero on every rerun, because every response
 is cached to `data/geocode_cache.json`. The field mask asks for `location` and
