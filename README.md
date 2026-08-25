@@ -105,9 +105,18 @@ change; only the cells whose text actually changed get re-asked.
 `scripts/seed_cache.py` writes hand-corrected results into that same cache, so
 a fix you make survives every future rerun.
 
-`scripts/check_palette.py` is the accessibility test for the two benefit
-colours. Run it after touching any colour token; it fails the build's intent
-if the two stop being distinguishable.
+Two checks worth running after any change:
+
+```bash
+./.venv/Scripts/python.exe scripts/check_palette.py    # colour blindness, contrast
+./.venv/Scripts/python.exe scripts/check_migration.py  # SQL grammar, column contracts
+npm run check                                          # types and lint
+```
+
+`check_migration.py` parses the migration with libpg_query, the real Postgres
+parser, and then checks what a parser cannot: a function's RETURNS TABLE list
+and its SELECT list are matched by position, so a mismatch parses cleanly and
+returns the wrong data.
 
 ---
 
@@ -152,7 +161,9 @@ private individuals' mobile numbers verbatim.
 |---|---|
 | A submission publishes at 2 independent confirmations | `apply_report()` trigger |
 | 3 "not working" reports in 60 days greys a place out | `apply_report()` trigger |
-| Nothing older than 6 months claims to be verified | `isStale()` in `src/lib/format.ts` |
+| Confirmed here, then quiet for 6 months, badges "לא מאומת לאחרונה" | `isStale()` in `src/lib/format.ts` |
+| Confirmed in the last 30 days badges "אומת החודש" | `isFresh()` in `src/lib/format.ts` |
+| Never confirmed here states its age in plain text, no badge | `isUnverified()` + `LastSignalLine` |
 | 5 reports per reporter per hour | `rateLimited()` in the route handlers |
 
 A place is never un-flipped automatically. `/admin` lists the ones that were
