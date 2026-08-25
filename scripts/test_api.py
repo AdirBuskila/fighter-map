@@ -85,11 +85,21 @@ def main() -> int:
     except requests.RequestException:
         sys.exit("the dev server is not answering on %s. Run npm run dev." % BASE)
 
-    # A fresh id per run, so the script is rerunnable without a database reset.
-    gpid = "ChIJ_test_" + uuid.uuid4().hex[:12]
+    # A fresh id AND a fresh set of reporters per run. The rate limit is per
+    # reporter per hour and counted in the database, so reusing fixed addresses
+    # would make the second run of the day fail on the first request.
+    run = uuid.uuid4().hex[:12]
+    gpid = "ChIJ_test_" + run
+
+    actors: dict = {}
+
+    def ip(label: str) -> str:
+        """A stable, valid address per actor, unique to this run."""
+        actors.setdefault(label, len(actors) + 1)
+        return "198.51.%d.%d" % (int(run[:2], 16), actors[label])
 
     print("A. somebody adds a place")
-    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), "10.0.0.1")
+    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), ip("alice"))
     check("a new place is accepted", status, 200)
     check("and waits for a second opinion", body.get("outcome"), "pending")
     place_id = body.get("placeId")
@@ -99,14 +109,14 @@ def main() -> int:
 
     status, body = post("/api/submissions",
                         submission(gpid, "בורגר בדיקה", benefitVacationVoucher=True),
-                        "10.0.0.1")
+                        ip("alice"))
     check("the same person again is not a second opinion",
           body.get("outcome"), "confirmed_existing")
 
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("a pending place is not readable yet", detail.status_code, 404)
 
-    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), "10.0.0.2")
+    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), ip("bob"))
     check("a second person confirms it", body.get("outcome"), "confirmed_existing")
 
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
@@ -121,14 +131,15 @@ def main() -> int:
           any(p["id"] == place_id for p in near.get("places", [])), True)
 
     print("\nB. somebody reports it stopped working")
-    for i, ip in enumerate(("10.0.0.3", "10.0.0.3", "10.0.0.3"), start=1):
-        post("/api/reports", {"placeId": place_id, "kind": "not_working"}, ip)
+    carol = ip("carol")
+    for _ in range(3):
+        post("/api/reports", {"placeId": place_id, "kind": "not_working"}, carol)
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("three taps from one person do not flip it",
           "דווח שלא עבד" in detail.text, False)
 
-    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, "10.0.0.4")
-    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, "10.0.0.5")
+    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, ip("dave"))
+    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, ip("erin"))
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("three independent reporters flip it", "דווח שלא עבד" in detail.text, True)
     check("and it is still readable, not hidden", detail.status_code, 200)
@@ -139,46 +150,49 @@ def main() -> int:
           any(p["id"] == place_id for p in near.get("places", [])), True)
 
     print("\nC. what the endpoints refuse")
-    status, body = post("/api/reports", {"placeId": "not-a-uuid", "kind": "confirm"}, "10.0.0.9")
+    status, body = post("/api/reports", {"placeId": "not-a-uuid", "kind": "confirm"}, ip("bad"))
     check("a malformed id is rejected", status, 400)
     status, body = post("/api/reports",
-                        {"placeId": str(uuid.uuid4()), "kind": "confirm"}, "10.0.0.9")
+                        {"placeId": str(uuid.uuid4()), "kind": "confirm"}, ip("bad"))
     check("a report for a place that does not exist", status, 404)
     status, body = post("/api/submissions",
-                        submission("ChIJ_x", "x", benefitFighterCard=False), "10.0.0.9")
+                        submission("ChIJ_x", "x", benefitFighterCard=False), ip("bad"))
     check("a submission with no benefit selected", status, 400)
     check("and it says so in Hebrew", "הטבה" in body.get("error", ""), True)
     status, body = post("/api/reports",
                         {"placeId": place_id, "kind": "confirm", "note": "x" * 201},
-                        "10.0.0.9")
+                        ip("bad"))
     check("an over-long note", status, 400)
 
     print("\nD. the rate limit")
+    # A reporter who has spent nothing yet, so the count starts at zero
+    # however many times this script has run in the last hour.
+    flooder = ip("flood")
     limited_at = None
     for attempt in range(1, 8):
         status, body = post("/api/reports",
-                            {"placeId": place_id, "kind": "confirm"}, "10.0.0.20")
+                            {"placeId": place_id, "kind": "confirm"}, flooder)
         if status == 429:
             limited_at = attempt
             break
     check("five reports an hour, then a refusal", limited_at, 6)
 
     print("\nE. moderation")
-    status, body = post("/api/admin", {"action": "list", "password": "wrong"}, "10.0.0.30")
+    status, body = post("/api/admin", {"action": "list", "password": "wrong"}, ip("mod"))
     check("a wrong password is refused", status, 401)
 
     status, body = post("/api/admin",
-                        {"action": "list", "password": args.admin_password}, "10.0.0.30")
+                        {"action": "list", "password": args.admin_password}, ip("mod"))
     check("the queue loads", status, 200)
     check("and the flipped place is in it",
           any(row["id"] == place_id for row in body.get("flagged", [])), True)
 
     status, body = post("/api/admin",
                         {"action": "restore", "placeId": place_id,
-                         "password": args.admin_password}, "10.0.0.30")
+                         "password": args.admin_password}, ip("mod"))
     check("a moderator restores it", status, 200)
 
-    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, "10.0.0.6")
+    post("/api/reports", {"placeId": place_id, "kind": "not_working"}, ip("frank"))
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("and one new report does not re-flip it",
           "דווח שלא עבד" in detail.text, False)
