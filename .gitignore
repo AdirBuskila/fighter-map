@@ -1,0 +1,31 @@
+# deps
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# next
+.next/
+out/
+build/
+.vercel/
+next-env.d.ts
+*.tsbuildinfo
+
+# secrets
+.env
+.env.local
+.env*.local
+
+# Seed data derived from fighter.pdf. It contains personal mobile numbers of
+# private individuals verbatim, so nothing under data/ is committed. Rerun
+# scripts/01_extract.py to regenerate; the pipeline is idempotent.
+data/*
+!data/.gitkeep
+
+# The source spreadsheet export, same reason.
+fighter.pdf
+
+# os
+.DS_Store
+Thumbs.db
