@@ -12,8 +12,8 @@ project; the container is disposable and the script offers to remove it.
 
 Needs Docker running. Everything it asserts is also true of Supabase, which is
 plain Postgres 15/16 with PostGIS; the only difference is the anon and
-authenticated roles, which this script creates so the GRANT and POLICY
-statements at the end of the migration can run.
+authenticated and service_role roles, which this script creates so the GRANT
+and POLICY statements at the end of the migration can run.
 """
 
 from __future__ import annotations
@@ -103,13 +103,14 @@ def main() -> int:
 
     start_container(args.rebuild)
 
-    # anon and authenticated exist on Supabase but not in a bare image, and the
-    # migration's GRANT and POLICY statements name them.
-    psql_c("do $$ begin "
-           "if not exists (select from pg_roles where rolname='anon') "
-           "then create role anon nologin; end if; "
-           "if not exists (select from pg_roles where rolname='authenticated') "
-           "then create role authenticated nologin; end if; end $$;")
+    # These three exist on Supabase but not in a bare Postgres image, and the
+    # migration's GRANT and POLICY statements name all of them.
+    for role in ("anon", "authenticated", "service_role"):
+        psql_c(
+            "do $$ begin if not exists "
+            "(select from pg_roles where rolname='%s') "
+            "then create role %s nologin; end if; end $$;" % (role, role)
+        )
 
     for label, path in (("migration", MIGRATION), ("tests", TESTS)):
         run(["docker", "cp", str(path), f"{CONTAINER}:/tmp/{label}.sql"])
