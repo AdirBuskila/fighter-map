@@ -105,18 +105,41 @@ change; only the cells whose text actually changed get re-asked.
 `scripts/seed_cache.py` writes hand-corrected results into that same cache, so
 a fix you make survives every future rerun.
 
-Two checks worth running after any change:
+---
+
+## Tests
 
 ```bash
+npm run check                                          # types and lint
 ./.venv/Scripts/python.exe scripts/check_palette.py    # colour blindness, contrast
 ./.venv/Scripts/python.exe scripts/check_migration.py  # SQL grammar, column contracts
-npm run check                                          # types and lint
+./.venv/Scripts/python.exe scripts/test_db.py          # trust rules, needs Docker
 ```
 
 `check_migration.py` parses the migration with libpg_query, the real Postgres
-parser, and then checks what a parser cannot: a function's RETURNS TABLE list
-and its SELECT list are matched by position, so a mismatch parses cleanly and
+parser, then checks what a parser cannot: a function's RETURNS TABLE list and
+its SELECT list are matched by position, so a mismatch parses cleanly and
 returns the wrong data.
+
+`test_db.py` starts a throwaway PostGIS container, applies the migration and
+runs `supabase/tests/trust_rules.sql`: 30 assertions over both flows, the
+constraints and the RPCs. It is not a vacuous suite; the bugs it was written
+for were re-introduced deliberately and it caught each one.
+
+For the layer above the database, run the whole stack:
+
+```bash
+npx supabase start        # Postgres, PostgREST, the lot, on 54321
+npm run dev
+./.venv/Scripts/python.exe scripts/test_api.py    # 24 assertions
+npx supabase stop         # when you are done
+```
+
+`test_api.py` drives the real route handlers, acting as several different
+reporters via `X-Forwarded-For`, which is what the rate limiter hashes. It
+covers what SQL cannot: Zod at the edge, the rate limit, the
+duplicate-submission branch, and whether PostgREST accepts the EWKT literal
+the submission route sends for a geography column.
 
 ---
 
@@ -159,8 +182,9 @@ private individuals' mobile numbers verbatim.
 
 | Rule | Where it lives |
 |---|---|
-| A submission publishes at 2 independent confirmations | `apply_report()` trigger |
-| 3 "not working" reports in 60 days greys a place out | `apply_report()` trigger |
+| A submission publishes at 2 independent vouches, the submitter counting as the first | `apply_report()` trigger |
+| 3 "not working" reports from 3 **distinct** reporters in 60 days greys a place out | `apply_report()` trigger |
+| A moderator's restore retires the old reports so they cannot re-flip it | `superseded_at` on `reports` |
 | Confirmed here, then quiet for 6 months, badges "לא מאומת לאחרונה" | `isStale()` in `src/lib/format.ts` |
 | Confirmed in the last 30 days badges "אומת החודש" | `isFresh()` in `src/lib/format.ts` |
 | Never confirmed here states its age in plain text, no badge | `isUnverified()` + `LastSignalLine` |

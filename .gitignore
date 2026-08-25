@@ -29,3 +29,7 @@ fighter.pdf
 # os
 .DS_Store
 Thumbs.db
+
+# Supabase CLI local state (config.toml is committed, the rest is not)
+supabase/.branches/
+supabase/.temp/

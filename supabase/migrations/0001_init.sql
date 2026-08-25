@@ -378,6 +378,21 @@ create policy reports_anon_insert on reports
 -- No insert, update or delete policy on places: those go through a route
 -- handler holding the service role key, which bypasses RLS.
 
-grant execute on function places_near  to anon, authenticated;
-grant execute on function places_all   to anon, authenticated;
-grant execute on function place_by_id  to anon, authenticated;
+-- RLS decides which ROWS a role may see. Table privileges decide whether it
+-- may touch the table at all, and they are a separate system: without these
+-- grants every anonymous read fails with "permission denied for table places"
+-- however permissive the policy is. Supabase's default privileges do not cover
+-- a table created by a migration, so grant explicitly rather than inherit.
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select on places  to anon, authenticated;
+grant insert on reports to anon, authenticated;
+
+-- Every write the app makes goes through a route handler holding the service
+-- role key, which bypasses RLS but still needs the privilege.
+grant all on places  to service_role;
+grant all on reports to service_role;
+
+grant execute on function places_near  to anon, authenticated, service_role;
+grant execute on function places_all   to anon, authenticated, service_role;
+grant execute on function place_by_id  to anon, authenticated, service_role;
