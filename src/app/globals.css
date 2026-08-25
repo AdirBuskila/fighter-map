@@ -66,7 +66,8 @@
   --warn-tint: #f8e3df;
   --on-warn: #ffffff;
 
-  --ok: #1f6a3f;
+  --ok: #1c6438;
+  --ok-tint: #dff0e5;
 
   --focus: #1b4fd8;
   --radius: 4px;
@@ -94,7 +95,8 @@
     --warn-tint: #3a1712;
     --on-warn: #2a0b06;
 
-    --ok: #6fcf97;
+    --ok: #74d3a0;
+    --ok-tint: #13291d;
 
     --focus: #7da5ff;
   }
@@ -118,6 +120,7 @@
   --color-warn-tint: var(--warn-tint);
   --color-on-warn: var(--on-warn);
   --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
 }
 
 * {
@@ -294,6 +297,12 @@ label.tap {
   border-color: var(--warn);
   background: var(--warn-tint);
   color: var(--warn);
+}
+
+.chip-ok {
+  border-color: var(--ok);
+  background: var(--ok-tint);
+  color: var(--ok);
 }
 
 .chip-stale {

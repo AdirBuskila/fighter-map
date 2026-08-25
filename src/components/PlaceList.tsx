@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { BenefitChips, KindChip, StatusBadges } from "./Badges";
+import { BenefitChips, KindChip, LastSignalLine, StatusBadges } from "./Badges";
 import ChainBranches from "./ChainBranches";
-import { formatDistance } from "@/lib/format";
+import { formatDistance, isUnverified } from "@/lib/format";
 import { CATEGORY_LABELS, type EphemeralBranch, type Place } from "@/lib/types";
 
 type Props = {
@@ -109,6 +109,15 @@ export default function PlaceList({
                 <KindChip place={place} />
                 <StatusBadges place={place} />
               </div>
+
+              {/* Rows without a badge are the ones nobody has confirmed here
+                  yet, which is most of the imported set. Say how old the
+                  information is instead of leaving the row silent. */}
+              {isUnverified(place) && place.status === "published" && (
+                <p className="mt-1">
+                  <LastSignalLine place={place} />
+                </p>
+              )}
 
               {place.note_he && (
                 <p

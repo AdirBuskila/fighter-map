@@ -1,5 +1,5 @@
 import type { Place } from "@/lib/types";
-import { formatDate, isStale, lastSignal } from "@/lib/format";
+import { formatDate, isFresh, isStale, lastSignal } from "@/lib/format";
 
 /**
  * Benefit chips. Shape carries the meaning as well as colour: a circle for the
@@ -31,29 +31,40 @@ export function KindChip({ place }: { place: Place }) {
   return null;
 }
 
-/** Warnings, in the order a reader needs them. */
+/** Badges, in the order a reader needs them. At most one appears per place. */
 export function StatusBadges({ place }: { place: Place }) {
-  const stale = isStale(place);
-  return (
-    <>
-      {place.status === "reported_not_working" && (
-        <span className="chip chip-warn">דווח שלא עבד</span>
-      )}
-      {place.status === "pending" && <span className="chip">ממתין לאישור</span>}
-      {stale && place.status !== "reported_not_working" && (
-        <span className="chip chip-stale">לא מאומת לאחרונה</span>
-      )}
-    </>
-  );
+  if (place.status === "reported_not_working") {
+    return <span className="chip chip-warn">דווח שלא עבד</span>;
+  }
+  if (place.status === "pending") {
+    return <span className="chip">ממתין לאישור</span>;
+  }
+  if (isStale(place)) {
+    return <span className="chip chip-stale">לא מאומת לאחרונה</span>;
+  }
+  if (isFresh(place)) {
+    return <span className="chip chip-ok">אומת החודש</span>;
+  }
+  return null;
 }
 
+/**
+ * The age of the information, as a plain sentence rather than a badge. Most
+ * imported places land here: reported once by somebody in the spreadsheet and
+ * never confirmed on the site since.
+ */
 export function LastSignalLine({ place }: { place: Place }) {
   const date = formatDate(lastSignal(place));
-  if (!date) return null;
-  const verb = place.last_confirmed_at ? "אומת" : "דווח";
+  if (!date) {
+    return (
+      <span className="text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
+        מהדיווחים המקוריים, בלי תאריך
+      </span>
+    );
+  }
   return (
     <span className="text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
-      {verb} לאחרונה ב{date}
+      {place.last_confirmed_at ? `אומת לאחרונה ב${date}` : `דווח ב${date}`}
     </span>
   );
 }

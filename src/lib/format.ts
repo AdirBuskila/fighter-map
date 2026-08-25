@@ -1,6 +1,8 @@
 import type { Place } from "./types";
 
-const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 183;
+const DAY_MS = 1000 * 60 * 60 * 24;
+const SIX_MONTHS_MS = DAY_MS * 183;
+const ONE_MONTH_MS = DAY_MS * 30;
 
 /** Distance the way someone standing on a pavement would say it. */
 export function formatDistance(metres: number | null): string | null {
@@ -25,10 +27,33 @@ export function lastSignal(place: Place): string | null {
   return place.last_confirmed_at ?? place.first_reported_at;
 }
 
+/**
+ * Verified once, but a long time ago.
+ *
+ * Deliberately false when last_confirmed_at is null. Falling back to
+ * first_reported_at instead would badge 772 of the 857 imported places on the
+ * first day, because the seed spreadsheet is a historical dump: a warning on
+ * ninety percent of rows is decoration, and it buries the rows that really
+ * did go quiet. A place nobody has confirmed here yet is a different fact,
+ * and it gets stated plainly instead.
+ */
 export function isStale(place: Place): boolean {
-  const signal = lastSignal(place);
-  if (!signal) return true;
-  return Date.now() - new Date(signal).getTime() > SIX_MONTHS_MS;
+  if (!place.last_confirmed_at) return false;
+  return Date.now() - new Date(place.last_confirmed_at).getTime() > SIX_MONTHS_MS;
+}
+
+/** Nobody has vouched for this place on the site yet. */
+export function isUnverified(place: Place): boolean {
+  return !place.last_confirmed_at;
+}
+
+/**
+ * Confirmed in the last month. This is the scarce signal on a crowd-sourced
+ * map, so it is the one worth spending a badge on.
+ */
+export function isFresh(place: Place): boolean {
+  if (!place.last_confirmed_at) return false;
+  return Date.now() - new Date(place.last_confirmed_at).getTime() <= ONE_MONTH_MS;
 }
 
 export function wazeUrl(place: Place): string {

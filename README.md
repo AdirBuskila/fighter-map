@@ -46,9 +46,12 @@ JavaScript / vector renderer, and put it in
 `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Advanced markers do not render without one;
 the app falls back to `DEMO_MAP_ID`, which is watermarked.
 
-Set a **budget alert** before you run the geocoder. It makes roughly 610 Text
+Set a **budget alert** before you run the geocoder. It makes exactly 610 Text
 Search calls on the first pass and zero on every rerun, because every response
-is cached to `data/geocode_cache.json`.
+is cached to `data/geocode_cache.json`. The field mask asks for `location` and
+`displayName`, which puts it on the Pro tier: 610 × $32/1000 ≈ **$19.50**,
+inside Google's $200 monthly credit. 499 of the 610 queries carry a city, the
+rest are a name biased to Israel.
 
 ### 3. Cloudflare Turnstile
 

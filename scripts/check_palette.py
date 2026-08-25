@@ -30,6 +30,7 @@ THEMES = {
         "fighter": "#1B4FD8",   # signage blue
         "voucher": "#A66100",   # signage amber
         "warn":    "#A8321E",
+        "ok":      "#1C6438",
     },
     "dark": {
         "bg":      "#12151A",
@@ -37,6 +38,7 @@ THEMES = {
         "fighter": "#7DA5FF",
         "voucher": "#E0A03A",
         "warn":    "#FF9080",
+        "ok":      "#74D3A0",
     },
 }
 
@@ -197,7 +199,7 @@ def main() -> int:
             print("     %-14s deltaE %6.1f   %s" % (name, delta, "ok" if ok else "TOO CLOSE"))
 
         print("  2. is each accent readable as text on the page?  (want >= 4.5)")
-        for key in ("fighter", "voucher", "warn"):
+        for key in ("fighter", "voucher", "warn", "ok"):
             ratio = contrast(hex_to_rgb(tokens[key]), bg)
             ok = ratio >= 4.5
             failures += [] if ok else ["%s/%s on bg %.2f" % (theme, key, ratio)]
