@@ -25,7 +25,8 @@ export type Category =
 /** One row as `places_near` and `places_all` return it. */
 export type Place = {
   id: string;
-  google_place_id: string | null;
+  /** Stable external identity, e.g. "osm:node/4798363423". */
+  provider_ref: string | null;
   name_he: string;
   name_en: string | null;
   category: Category;
@@ -100,6 +101,11 @@ export const BENEFIT_LABELS: Record<BenefitType, string> = {
 /** Israel, framed so the whole country fits on a phone in portrait. */
 export const ISRAEL_CENTER = { lat: 31.5, lng: 34.95 };
 export const ISRAEL_DEFAULT_ZOOM = 7;
+
+/** Where suggestions go. Subject is prefilled so the inbox stays sortable. */
+export const CONTACT_EMAIL = "adirbu98@gmail.com";
+export const CONTACT_MAILTO =
+  `mailto:${CONTACT_EMAIL}?subject=` + encodeURIComponent("מפת הטבות פייטר");
 
 export const LEGAL_NOTICE =
   "אתר קהילתי לא רשמי. המידע מבוסס על דיווחי משתמשים ואינו מהווה התחייבות של מפעיל הכרטיס. ייתכנו שינויים, מומלץ לוודא בבית העסק.";

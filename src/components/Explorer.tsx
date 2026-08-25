@@ -1,10 +1,15 @@
 "use client";
 
-import { APIProvider } from "@vis.gl/react-google-maps";
+import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import FilterBar, { type Filters } from "./FilterBar";
-import MapView from "./MapView";
 import PlaceList from "./PlaceList";
+
+// MapLibre touches window on import, so it must never run during SSR.
+const MapView = dynamic(() => import("./MapView"), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-surface-sunk" />,
+});
 import { currentPosition, type LatLng } from "@/lib/geo";
 import type { Category, EphemeralBranch, Place } from "@/lib/types";
 
@@ -13,7 +18,6 @@ type Props = { mapped: Place[]; unmapped: Place[] };
 const NEAR_RADIUS_M = 25000;
 
 export default function Explorer({ mapped, unmapped }: Props) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
   const [filters, setFilters] = useState<Filters>({
     benefit: null,
     categories: new Set<Category>(),
@@ -110,18 +114,14 @@ export default function Explorer({ mapped, unmapped }: Props) {
   const body = (
     <div className="flex flex-1 flex-col lg:flex-row-reverse">
       <div className="h-[60vh] shrink-0 lg:h-auto lg:w-[58%] lg:flex-1">
-        {apiKey ? (
-          <MapView
-            places={visibleMapped}
-            branches={branches}
-            origin={origin}
-            selectedId={selectedId}
-            selectionFrom={selectionFrom}
-            onSelect={select}
-          />
-        ) : (
-          <MapMissingKey />
-        )}
+        <MapView
+          places={visibleMapped}
+          branches={branches}
+          origin={origin}
+          selectedId={selectedId}
+          selectionFrom={selectionFrom}
+          onSelect={select}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:w-[42%] lg:max-w-[520px] lg:flex-none lg:overflow-y-auto">
@@ -171,33 +171,5 @@ export default function Explorer({ mapped, unmapped }: Props) {
     </div>
   );
 
-  if (!apiKey) return body;
-
-  return (
-    <APIProvider
-      apiKey={apiKey}
-      language="he"
-      region="IL"
-      libraries={["places", "marker"]}
-    >
-      {body}
-    </APIProvider>
-  );
-}
-
-function MapMissingKey() {
-  return (
-    <div className="flex h-full items-center justify-center bg-surface-sunk p-6">
-      <div className="max-w-sm text-center">
-        <p className="font-bold" style={{ fontSize: "var(--text-lg)" }}>
-          המפה לא נטענה
-        </p>
-        <p className="mt-2 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
-          חסר מפתח Google Maps לדפדפן. הוסיפו
-          NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY לקובץ env.local. הרשימה שמתחת
-          עובדת גם בלי המפה.
-        </p>
-      </div>
-    </div>
-  );
+  return body;
 }

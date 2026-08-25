@@ -24,7 +24,7 @@ async function localSeed(): Promise<Place[]> {
     );
     return rows.map((row, index) => ({
       ...(row as object),
-      id: (row.google_place_id as string) ?? `local-${index}`,
+      id: (row.provider_ref as string) ?? `local-${index}`,
       status: "published",
       confirm_count: 0,
       report_count: 0,
@@ -63,7 +63,7 @@ export async function fetchUnmappedPlaces(): Promise<Place[]> {
   const { data, error } = await serverClient()
     .from("places")
     .select(
-      "id, google_place_id, name_he, name_en, category, is_chain, is_online," +
+      "id, provider_ref, name_he, name_en, category, is_chain, is_online," +
         " address_he, city, phone, url, benefit_fighter_card," +
         " benefit_vacation_voucher, note_he, status, confirm_count," +
         " report_count, first_reported_at, last_confirmed_at",

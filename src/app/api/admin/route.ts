@@ -4,7 +4,7 @@ import { serviceClient, supabaseConfigured } from "@/lib/supabase";
 import { adminPasswordOk, jsonError } from "@/lib/server/security";
 
 const QUEUE_COLUMNS =
-  "id, google_place_id, name_he, name_en, category, is_chain, is_online," +
+  "id, provider_ref, name_he, name_en, category, is_chain, is_online," +
   " address_he, city, phone, url, benefit_fighter_card," +
   " benefit_vacation_voucher, note_he, status, source, review_reason," +
   " confirm_count, report_count, first_reported_at, last_confirmed_at, created_at";

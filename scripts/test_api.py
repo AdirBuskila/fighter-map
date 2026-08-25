@@ -27,6 +27,12 @@ import uuid
 
 import requests
 
+CATEGORIES = {
+    "restaurant", "cafe", "hotel", "zimmer", "spa", "clothing", "shoes",
+    "sports", "electronics", "toys", "jewelry", "attraction", "gov_service",
+    "other",
+}
+
 BASE = "http://localhost:3000"
 PASSED, FAILED = [], []
 
@@ -53,9 +59,9 @@ def post(path: str, body: dict, ip: str) -> tuple:
         return response.status_code, {"raw": response.text[:200]}
 
 
-def submission(place_id: str, name: str, **overrides) -> dict:
+def submission(provider_ref: str, name: str, **overrides) -> dict:
     body = {
-        "googlePlaceId": place_id,
+        "providerRef": provider_ref,
         "nameHe": name,
         "lat": 32.0853,
         "lng": 34.7818,
@@ -89,7 +95,7 @@ def main() -> int:
     # reporter per hour and counted in the database, so reusing fixed addresses
     # would make the second run of the day fail on the first request.
     run = uuid.uuid4().hex[:12]
-    gpid = "ChIJ_test_" + run
+    ref = "osm:node/9" + run[:8]
 
     actors: dict = {}
 
@@ -99,7 +105,7 @@ def main() -> int:
         return "198.51.%d.%d" % (int(run[:2], 16), actors[label])
 
     print("A. somebody adds a place")
-    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), ip("alice"))
+    status, body = post("/api/submissions", submission(ref, "בורגר בדיקה"), ip("alice"))
     check("a new place is accepted", status, 200)
     check("and waits for a second opinion", body.get("outcome"), "pending")
     place_id = body.get("placeId")
@@ -108,7 +114,7 @@ def main() -> int:
         return 1
 
     status, body = post("/api/submissions",
-                        submission(gpid, "בורגר בדיקה", benefitVacationVoucher=True),
+                        submission(ref, "בורגר בדיקה", benefitVacationVoucher=True),
                         ip("alice"))
     check("the same person again is not a second opinion",
           body.get("outcome"), "confirmed_existing")
@@ -116,7 +122,7 @@ def main() -> int:
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("a pending place is not readable yet", detail.status_code, 404)
 
-    status, body = post("/api/submissions", submission(gpid, "בורגר בדיקה"), ip("bob"))
+    status, body = post("/api/submissions", submission(ref, "בורגר בדיקה"), ip("bob"))
     check("a second person confirms it", body.get("outcome"), "confirmed_existing")
 
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
@@ -156,7 +162,7 @@ def main() -> int:
                         {"placeId": str(uuid.uuid4()), "kind": "confirm"}, ip("bad"))
     check("a report for a place that does not exist", status, 404)
     status, body = post("/api/submissions",
-                        submission("ChIJ_x", "x", benefitFighterCard=False), ip("bad"))
+                        submission("osm:node/1", "x", benefitFighterCard=False), ip("bad"))
     check("a submission with no benefit selected", status, 400)
     check("and it says so in Hebrew", "הטבה" in body.get("error", ""), True)
     status, body = post("/api/reports",
@@ -176,6 +182,24 @@ def main() -> int:
             limited_at = attempt
             break
     check("five reports an hour, then a refusal", limited_at, 6)
+
+    print(chr(10) + "E. place search")
+    # The one piece with an external dependency, so worth asserting on rather
+    # than assuming. Castro is a big chain and well mapped in OSM.
+    found = requests.get(f"{BASE}/api/search",
+                         params={"q": "קסטרו", "limit": 5}, timeout=30)
+    check("search answers", found.status_code, 200)
+    hits = found.json().get("results", [])
+    check("and finds a well known chain", len(hits) > 0, True)
+    if hits:
+        check("every hit carries an osm ref",
+              all(h["providerRef"].startswith("osm:") for h in hits), True)
+        check("and real coordinates",
+              all(isinstance(h["lat"], float) for h in hits), True)
+        check("and a category the app understands",
+              all(h["category"] in CATEGORIES for h in hits), True)
+    short = requests.get(f"{BASE}/api/search", params={"q": "a"}, timeout=30)
+    check("a one letter query is not sent upstream", short.json().get("results"), [])
 
     print("\nE. moderation")
     status, body = post("/api/admin", {"action": "list", "password": "wrong"}, ip("mod"))

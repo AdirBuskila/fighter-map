@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MIGRATION = ROOT / "supabase" / "migrations" / "0001_init.sql"
+MIGRATIONS = sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
 TESTS = ROOT / "supabase" / "tests" / "trust_rules.sql"
 
 CONTAINER = "fighter-pg"
@@ -112,15 +112,17 @@ def main() -> int:
             "then create role %s nologin; end if; end $$;" % (role, role)
         )
 
-    for label, path in (("migration", MIGRATION), ("tests", TESTS)):
-        run(["docker", "cp", str(path), f"{CONTAINER}:/tmp/{label}.sql"])
+    print("\napplying %d migrations" % len(MIGRATIONS))
+    for path in MIGRATIONS:
+        run(["docker", "cp", str(path), f"{CONTAINER}:/tmp/{path.name}"])
+        applied = psql("/tmp/%s" % path.name)
+        if applied.returncode != 0:
+            print("  FAILED  %s" % path.name)
+            print(applied.stderr or applied.stdout)
+            return 1
+        print("  ok      %s" % path.name)
 
-    print("\napplying the migration")
-    applied = psql("/tmp/migration.sql")
-    if applied.returncode != 0:
-        print(applied.stderr or applied.stdout)
-        return 1
-    print("  ok")
+    run(["docker", "cp", str(TESTS), f"{CONTAINER}:/tmp/tests.sql"])
 
     print("\nrunning the trust rule tests")
     tested = psql("/tmp/tests.sql")

@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, type Category } from "@/lib/types";
 
 type QueueRow = {
   id: string;
-  google_place_id: string | null;
+  provider_ref: string | null;
   name_he: string;
   name_en: string | null;
   category: Category;
@@ -25,9 +25,9 @@ type QueueRow = {
 type Queues = { pending: QueueRow[]; flagged: QueueRow[]; revived: QueueRow[] };
 
 const REASON_LABELS: Record<string, string> = {
-  low_match_confidence: "גוגל החזיר מקום שלא בטוח שהוא הנכון",
-  no_google_result: "גוגל לא מצא את המקום",
-  not_geocoded: "עוד לא נשלח לגוגל",
+  low_match_confidence: "ההתאמה שנמצאה לא בטוחה מספיק",
+  no_osm_match: "לא נמצאה התאמה במפה",
+  not_located: "עוד לא נבדק מול המפה",
   low_confidence: "השם מהקובץ לא ברור מספיק",
   unclear: "לא ברור איזה עסק זה",
 };
@@ -141,7 +141,7 @@ export default function AdminPanel() {
 
       <Section
         title="ממתינים לאישור"
-        hint="הגשות משתמשים ושורות מהקובץ שלא הצליחו להתאים לגוגל."
+        hint="הגשות משתמשים, ושורות מהקובץ שלא נמצאה להן התאמה במפה."
         rows={queues.pending}
         empty="אין כלום בתור. אפשר לסגור את הדף."
         busy={busy}
@@ -266,7 +266,7 @@ function QueueItem({
       </p>
       <p className="text-ink-faint tabular-nums" style={{ fontSize: "var(--text-2xs)" }}>
         אישורים {row.confirm_count} · דיווחי כשל {row.report_count}
-        {row.google_place_id ? " · מזוהה בגוגל" : " · בלי מזהה גוגל"}
+        {row.provider_ref ? " · מזוהה במפה" : " · בלי מזהה מפה"}
       </p>
       {row.note_he && (
         <p className="mt-1 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>

@@ -1,59 +1,64 @@
 import type { Category } from "./types";
 
 /**
- * Guess our category from Google's place types, so the submitter only has to
- * correct it rather than choose from fourteen options with a thumb.
- * Order matters: the first rule that matches wins.
+ * Map an OSM key/value pair onto our category list, so the submitter only has
+ * to correct the guess rather than pick from fourteen options with a thumb.
+ * Photon returns the raw tag, e.g. osm_key="shop", osm_value="shoes".
  */
-const RULES: Array<[Category, string[]]> = [
-  ["cafe", ["cafe", "coffee_shop", "bakery", "ice_cream_shop", "dessert_shop"]],
-  ["restaurant", ["restaurant", "meal_takeaway", "meal_delivery", "bar", "pub", "food"]],
-  ["hotel", ["hotel", "lodging", "resort_hotel", "motel", "hostel", "extended_stay_hotel"]],
-  ["zimmer", ["bed_and_breakfast", "guest_house", "cottage", "campground", "farmstay"]],
-  ["spa", ["spa", "wellness_center", "massage", "sauna", "beauty_salon"]],
-  ["shoes", ["shoe_store"]],
-  ["clothing", ["clothing_store", "boutique", "department_store"]],
-  ["sports", ["sporting_goods_store", "gym", "fitness_center", "sports_complex", "bicycle_store"]],
-  ["electronics", ["electronics_store", "cell_phone_store", "computer_store", "home_goods_store"]],
-  ["toys", ["toy_store", "baby_store", "child_care_agency"]],
-  ["jewelry", ["jewelry_store", "watch_store"]],
-  [
-    "attraction",
-    [
-      "tourist_attraction", "amusement_park", "water_park", "zoo", "museum",
-      "movie_theater", "aquarium", "national_park", "park", "bowling_alley",
-      "night_club", "event_venue",
-    ],
-  ],
-  ["gov_service", ["local_government_office", "city_hall", "post_office", "courthouse"]],
-];
+const OSM_CATEGORY: Record<string, Category> = {
+  "amenity:restaurant": "restaurant",
+  "amenity:fast_food": "restaurant",
+  "amenity:food_court": "restaurant",
+  "amenity:bar": "restaurant",
+  "amenity:pub": "restaurant",
+  "amenity:cafe": "cafe",
+  "amenity:ice_cream": "cafe",
+  "amenity:cinema": "attraction",
+  "amenity:theatre": "attraction",
+  "amenity:nightclub": "attraction",
+  "shop:bakery": "cafe",
+  "shop:pastry": "cafe",
+  "shop:clothes": "clothing",
+  "shop:boutique": "clothing",
+  "shop:fashion": "clothing",
+  "shop:department_store": "clothing",
+  "shop:shoes": "shoes",
+  "shop:sports": "sports",
+  "shop:bicycle": "sports",
+  "shop:outdoor": "sports",
+  "shop:electronics": "electronics",
+  "shop:mobile_phone": "electronics",
+  "shop:computer": "electronics",
+  "shop:toys": "toys",
+  "shop:baby_goods": "toys",
+  "shop:jewelry": "jewelry",
+  "shop:watches": "jewelry",
+  "tourism:hotel": "hotel",
+  "tourism:hostel": "hotel",
+  "tourism:motel": "hotel",
+  "tourism:resort": "hotel",
+  "tourism:guest_house": "zimmer",
+  "tourism:chalet": "zimmer",
+  "tourism:apartment": "zimmer",
+  "tourism:attraction": "attraction",
+  "tourism:museum": "attraction",
+  "tourism:theme_park": "attraction",
+  "tourism:zoo": "attraction",
+  "leisure:fitness_centre": "sports",
+  "leisure:sports_centre": "sports",
+  "leisure:water_park": "attraction",
+  "leisure:bowling_alley": "attraction",
+  "amenity:spa": "spa",
+  "shop:beauty": "spa",
+  "shop:massage": "spa",
+  "office:government": "gov_service",
+  "amenity:townhall": "gov_service",
+};
 
-export function guessCategory(types: readonly string[] | undefined): Category {
-  if (!types || types.length === 0) return "other";
-  const set = new Set(types);
-  for (const [category, googleTypes] of RULES) {
-    if (googleTypes.some((type) => set.has(type))) return category;
-  }
-  return "other";
-}
-
-/**
- * Pull a city out of a Google formatted address. Israeli addresses come back
- * as "street number, city, Israel", so the segment before the country is the
- * one worth keeping.
- */
-export function guessCity(formattedAddress: string | null | undefined): string | null {
-  if (!formattedAddress) return null;
-  const parts = formattedAddress
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .filter((part) => !/^ישראל$|^israel$/i.test(part));
-  if (parts.length === 0) return null;
-  const candidate = parts[parts.length - 1];
-  // A trailing postcode is not a city.
-  if (/^\d[\d\s]*$/.test(candidate)) {
-    return parts.length > 1 ? parts[parts.length - 2] : null;
-  }
-  return candidate.replace(/\s*\d{5,}\s*$/, "").trim() || null;
+export function guessCategoryFromOsm(
+  key: string | null,
+  value: string | null,
+): Category {
+  if (!key || !value) return "other";
+  return OSM_CATEGORY[`${key}:${value}`] ?? "other";
 }

@@ -1,13 +1,16 @@
 "use client";
 
-import { MarkerClusterer, type Marker } from "@googlemaps/markerclusterer";
 import {
-  AdvancedMarker,
-  ColorScheme,
-  Map,
-  useMap,
-} from "@vis.gl/react-google-maps";
-import { useEffect, useMemo, useRef, useState } from "react";
+  AttributionControl,
+  Map as MlMap,
+  Marker,
+  NavigationControl,
+  type GeoJSONSource,
+  type MapGeoJSONFeature,
+  type MapMouseEvent,
+} from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useEffect, useRef } from "react";
 import type { LatLng } from "@/lib/geo";
 import {
   ISRAEL_CENTER,
@@ -25,32 +28,18 @@ type Props = {
   onSelect: (id: string, from: "map" | "list") => void;
 };
 
-export default function MapView(props: Props) {
-  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
-  return (
-    <Map
-      mapId={mapId}
-      defaultCenter={ISRAEL_CENTER}
-      defaultZoom={ISRAEL_DEFAULT_ZOOM}
-      gestureHandling="greedy"
-      disableDefaultUI
-      zoomControl
-      // Stock Google is the most generic surface in this app. The basemap
-      // styles in design/ strip it back to coastline, road network and town
-      // names, so the only colour on the map is the dots. Those live on the
-      // Map ID in the cloud console; this makes the basemap follow the same
-      // light or dark choice as the page around it.
-      colorScheme={ColorScheme.FOLLOW_SYSTEM}
-      // Google's own POI pins are not our data and compete with it.
-      clickableIcons={false}
-      className="h-full w-full"
-    >
-      <Pins {...props} />
-    </Map>
-  );
-}
+const SRC = "places";
+const SRC_BRANCH = "branches";
 
-function Pins({
+/**
+ * OpenFreeMap vector tiles, MapLibre renderer, styles in public/map.
+ *
+ * No key, no billing account, no per-load charge. The styles are ours rather
+ * than theirs: coastline, roads and town names only, so the sole colour on the
+ * map is our own dots. A default basemap arrives full of pink hospitals and
+ * yellow shops that our data then has to compete with.
+ */
+export default function MapView({
   places,
   branches,
   origin,
@@ -58,166 +47,312 @@ function Pins({
   selectionFrom,
   onSelect,
 }: Props) {
-  const map = useMap();
-  const [markers, setMarkers] = useState<Record<string, Marker>>({});
-  const previousSelection = useRef<string | null>(null);
+  const host = useRef<HTMLDivElement>(null);
+  const map = useRef<MlMap | null>(null);
+  const ready = useRef(false);
+  const originMarker = useRef<Marker | null>(null);
+  const lastPanned = useRef<string | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
-  const clusterer = useMemo(() => {
-    if (!map) return null;
-    return new MarkerClusterer({ map, renderer: clusterRenderer() });
-  }, [map]);
-
+  // --- create once -------------------------------------------------------
   useEffect(() => {
-    if (!clusterer) return;
-    clusterer.clearMarkers();
-    clusterer.addMarkers(Object.values(markers));
-  }, [clusterer, markers]);
+    if (!host.current || map.current) return;
 
-  useEffect(() => () => clusterer?.clearMarkers(), [clusterer]);
+    const dark = window.matchMedia("(prefers-color-scheme: dark)");
+    const styleFor = (isDark: boolean) => `/map/${isDark ? "dark" : "light"}.json`;
 
-  // A tap in the list pans the map. A tap on the map must not pan it again, or
-  // the pin slides out from under the finger that just hit it.
-  useEffect(() => {
-    if (!map || !selectedId || selectionFrom !== "list") return;
-    if (previousSelection.current === selectedId) return;
-    previousSelection.current = selectedId;
-    const place = places.find((candidate) => candidate.id === selectedId);
-    if (place?.lat != null && place.lng != null) {
-      map.panTo({ lat: place.lat, lng: place.lng });
-      if ((map.getZoom() ?? 0) < 13) map.setZoom(13);
-    }
-  }, [map, places, selectedId, selectionFrom]);
-
-  function setMarkerRef(marker: Marker | null, key: string) {
-    setMarkers((current) => {
-      if ((marker && current[key]) || (!marker && !current[key])) return current;
-      const next = { ...current };
-      if (marker) next[key] = marker;
-      else delete next[key];
-      return next;
+    const instance = new MlMap({
+      container: host.current,
+      style: styleFor(dark.matches),
+      center: [ISRAEL_CENTER.lng, ISRAEL_CENTER.lat],
+      zoom: ISRAEL_DEFAULT_ZOOM,
+      attributionControl: false,
+      // Israel plus a margin. Nothing in this dataset is outside it, and the
+      // reader never wants to end up looking at the Atlantic.
+      maxBounds: [[33.0, 28.5], [37.2, 34.3]],
     });
-  }
+    map.current = instance;
 
-  return (
-    <>
-      {origin && (
-        <AdvancedMarker position={origin} title="המיקום שלכם" zIndex={1}>
-          <span
-            className="block h-3.5 w-3.5 rounded-full border-2 border-white"
-            style={{
-              background: "var(--ink)",
-              boxShadow: "0 0 0 3px color-mix(in srgb, var(--fighter) 40%, transparent)",
-            }}
-          />
-        </AdvancedMarker>
-      )}
+    instance.addControl(new NavigationControl({ showCompass: false }), "top-left");
+    instance.addControl(
+      new AttributionControl({
+        compact: true,
+        customAttribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }),
+      "bottom-left",
+    );
 
-      {places.map((place) =>
-        place.lat == null || place.lng == null ? null : (
-          <AdvancedMarker
-            key={place.id}
-            position={{ lat: place.lat, lng: place.lng }}
-            title={place.name_he}
-            zIndex={place.id === selectedId ? 30 : 10}
-            ref={(marker) => setMarkerRef(marker, place.id)}
-            onClick={() => onSelect(place.id, "map")}
-          >
-            <PlaceDot place={place} selected={place.id === selectedId} />
-          </AdvancedMarker>
-        ),
-      )}
+    instance.on("load", () => {
+      installLayers(instance);
+      ready.current = true;
+      paint(instance, places, branches);
+    });
 
-      {branches.map((branch) => (
-        <AdvancedMarker
-          key={branch.key}
-          position={{ lat: branch.lat, lng: branch.lng }}
-          title={branch.name}
-          zIndex={20}
-        >
-          <span
-            className="block rounded-full border-2 border-dashed"
-            style={{
-              width: 16,
-              height: 16,
-              borderColor: "var(--fighter)",
-              background: "var(--surface)",
-            }}
-          />
-        </AdvancedMarker>
-      ))}
-    </>
-  );
+    // Re-adding the layers is required after a style swap: setStyle throws away
+    // every source and layer that was not part of the new style document.
+    const onScheme = (event: MediaQueryListEvent) => {
+      instance.setStyle(styleFor(event.matches));
+      instance.once("styledata", () => {
+        installLayers(instance);
+        paint(instance, places, branches);
+      });
+    };
+    dark.addEventListener("change", onScheme);
+
+    instance.on("click", "clusters", (event: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
+      const feature = event.features?.[0];
+      const clusterId = feature?.properties?.cluster_id;
+      if (clusterId == null) return;
+      const source = instance.getSource(SRC) as GeoJSONSource;
+      void source.getClusterExpansionZoom(clusterId).then((zoom) => {
+        instance.easeTo({
+          center: (feature!.geometry as GeoJSON.Point).coordinates as [number, number],
+          zoom,
+        });
+      });
+    });
+
+    instance.on("click", "pins", (event: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
+      const id = event.features?.[0]?.properties?.id;
+      if (typeof id === "string") onSelectRef.current(id, "map");
+    });
+
+    for (const layer of ["clusters", "pins", "branch-pins"]) {
+      instance.on("mouseenter", layer, () => {
+        instance.getCanvas().style.cursor = "pointer";
+      });
+      instance.on("mouseleave", layer, () => {
+        instance.getCanvas().style.cursor = "";
+      });
+    }
+
+    return () => {
+      dark.removeEventListener("change", onScheme);
+      instance.remove();
+      map.current = null;
+      ready.current = false;
+    };
+    // Created once on purpose; data changes are pushed through the effects below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- push data ---------------------------------------------------------
+  useEffect(() => {
+    if (map.current && ready.current) paint(map.current, places, branches);
+  }, [places, branches]);
+
+  // --- selection ---------------------------------------------------------
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !ready.current) return;
+    instance.setFilter("pin-selected", ["==", ["get", "id"], selectedId ?? ""]);
+
+    // A tap in the list pans the map. A tap on the map must not pan it again,
+    // or the pin slides out from under the finger that just hit it.
+    if (!selectedId || selectionFrom !== "list") return;
+    if (lastPanned.current === selectedId) return;
+    lastPanned.current = selectedId;
+    const place = places.find((p) => p.id === selectedId);
+    if (place?.lat != null && place.lng != null) {
+      instance.easeTo({
+        center: [place.lng, place.lat],
+        zoom: Math.max(instance.getZoom(), 13),
+        duration: prefersReducedMotion() ? 0 : 600,
+      });
+    }
+  }, [selectedId, selectionFrom, places]);
+
+  // --- the reader's own position ----------------------------------------
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    originMarker.current?.remove();
+    originMarker.current = null;
+    if (!origin) return;
+
+    const dot = document.createElement("span");
+    dot.className = "origin-dot";
+    dot.title = "המיקום שלכם";
+    originMarker.current = new Marker({ element: dot })
+      .setLngLat([origin.lng, origin.lat])
+      .addTo(instance);
+  }, [origin]);
+
+  return <div ref={host} className="h-full w-full" />;
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** CSS custom properties are not available to the WebGL canvas, so read them. */
+function token(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }
 
 /**
  * Shape, not just colour: circle for the fighter card, diamond for the
- * vacation voucher, a ringed circle when a place takes both. The transparent
- * padding around the dot is the tap target, which is why it is far larger than
- * the ink.
+ * vacation voucher, a ringed circle for a place that takes both. Someone with
+ * no colour vision at all still reads the map correctly.
  */
-function PlaceDot({ place, selected }: { place: Place; selected: boolean }) {
-  const dead = place.status === "reported_not_working";
-  const both = place.benefit_fighter_card && place.benefit_vacation_voucher;
-  const voucherOnly = place.benefit_vacation_voucher && !place.benefit_fighter_card;
+function drawIcon(kind: "fighter" | "voucher" | "both" | "dead", selected: boolean): ImageData {
+  const size = 44;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const mid = size / 2;
+  const r = selected ? 11 : 7;
 
-  const fill = dead
-    ? "var(--ink-faint)"
-    : voucherOnly
-      ? "var(--voucher)"
-      : "var(--fighter)";
-  const size = selected ? 20 : 13;
+  const fill =
+    kind === "dead" ? token("--ink-faint", "#6d737b")
+    : kind === "voucher" ? token("--voucher", "#a66100")
+    : token("--fighter", "#1b4fd8");
 
-  return (
-    <span
-      style={{
-        display: "flex",
-        width: 44,
-        height: 44,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <span
-        style={{
-          width: size,
-          height: size,
-          background: fill,
-          border: `2px solid ${selected ? "var(--ink)" : "#ffffff"}`,
-          borderRadius: voucherOnly ? 2 : "50%",
-          transform: voucherOnly ? "rotate(45deg)" : undefined,
-          boxShadow: both ? `0 0 0 3px var(--voucher)` : "0 1px 2px rgba(0,0,0,0.4)",
-          opacity: dead ? 0.65 : 1,
-        }}
-      />
-    </span>
-  );
+  if (kind === "both") {
+    ctx.beginPath();
+    ctx.arc(mid, mid, r + 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = token("--voucher", "#a66100");
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  if (kind === "voucher") {
+    ctx.moveTo(mid, mid - r);
+    ctx.lineTo(mid + r, mid);
+    ctx.lineTo(mid, mid + r);
+    ctx.lineTo(mid - r, mid);
+    ctx.closePath();
+  } else {
+    ctx.arc(mid, mid, r, 0, Math.PI * 2);
+  }
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = selected ? token("--ink", "#0e1116") : "#ffffff";
+  ctx.stroke();
+
+  return ctx.getImageData(0, 0, size, size);
 }
 
-/** Clusters read as counts, in the fighter blue, never as a heat blob. */
-function clusterRenderer() {
-  return {
-    render({ count, position }: { count: number; position: google.maps.LatLng }) {
-      const div = document.createElement("div");
-      div.style.cssText = [
-        "display:flex",
-        "align-items:center",
-        "justify-content:center",
-        `width:${count < 10 ? 34 : count < 100 ? 40 : 46}px`,
-        `height:${count < 10 ? 34 : count < 100 ? 40 : 46}px`,
-        "border-radius:50%",
-        "background:var(--fighter)",
-        "color:var(--on-fighter)",
-        "border:2px solid #ffffff",
-        "font-weight:800",
-        "font-size:13px",
-        "font-variant-numeric:tabular-nums",
-      ].join(";");
-      div.textContent = String(count);
-      return new google.maps.marker.AdvancedMarkerElement({
-        position,
-        content: div,
-        zIndex: 5,
-      });
-    },
-  };
+function installLayers(map: MlMap): void {
+  for (const kind of ["fighter", "voucher", "both", "dead"] as const) {
+    for (const selected of [false, true]) {
+      const name = selected ? `${kind}-on` : kind;
+      if (map.hasImage(name)) map.removeImage(name);
+      map.addImage(name, drawIcon(kind, selected), { pixelRatio: 2 });
+    }
+  }
+
+  if (!map.getSource(SRC)) {
+    map.addSource(SRC, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      cluster: true,
+      clusterRadius: 46,
+      clusterMaxZoom: 13,
+    });
+  }
+  if (!map.getSource(SRC_BRANCH)) {
+    map.addSource(SRC_BRANCH, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+  }
+
+  const fighter = token("--fighter", "#1b4fd8");
+  const onFighter = token("--on-fighter", "#ffffff");
+
+  if (!map.getLayer("clusters")) {
+    map.addLayer({
+      id: "clusters",
+      type: "circle",
+      source: SRC,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": fighter,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+        "circle-radius": ["step", ["get", "point_count"], 16, 10, 20, 100, 24],
+      },
+    });
+    map.addLayer({
+      id: "cluster-count",
+      type: "symbol",
+      source: SRC,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": 13,
+      },
+      paint: { "text-color": onFighter },
+    });
+    map.addLayer({
+      id: "pins",
+      type: "symbol",
+      source: SRC,
+      filter: ["!", ["has", "point_count"]],
+      layout: {
+        "icon-image": ["get", "icon"],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+    });
+    map.addLayer({
+      id: "pin-selected",
+      type: "symbol",
+      source: SRC,
+      filter: ["==", ["get", "id"], ""],
+      layout: {
+        "icon-image": ["concat", ["get", "icon"], "-on"],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+    });
+    map.addLayer({
+      id: "branch-pins",
+      type: "circle",
+      source: SRC_BRANCH,
+      paint: {
+        "circle-radius": 7,
+        "circle-color": token("--surface", "#ffffff"),
+        "circle-stroke-color": fighter,
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+}
+
+function iconFor(place: Place): string {
+  if (place.status === "reported_not_working") return "dead";
+  if (place.benefit_fighter_card && place.benefit_vacation_voucher) return "both";
+  if (place.benefit_vacation_voucher) return "voucher";
+  return "fighter";
+}
+
+function paint(map: MlMap, places: Place[], branches: EphemeralBranch[]): void {
+  const source = map.getSource(SRC) as GeoJSONSource | undefined;
+  source?.setData({
+    type: "FeatureCollection",
+    features: places
+      .filter((p) => p.lat != null && p.lng != null)
+      .map((p) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.lng!, p.lat!] },
+        properties: { id: p.id, icon: iconFor(p), name: p.name_he },
+      })),
+  });
+
+  const branchSource = map.getSource(SRC_BRANCH) as GeoJSONSource | undefined;
+  branchSource?.setData({
+    type: "FeatureCollection",
+    features: branches.map((b) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [b.lng, b.lat] },
+      properties: { name: b.name },
+    })),
+  });
 }

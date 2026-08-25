@@ -26,7 +26,7 @@ from pglast import parse_sql
 from pglast.parser import ParseError
 
 ROOT = Path(__file__).resolve().parent.parent
-MIGRATION = ROOT / "supabase" / "migrations" / "0001_init.sql"
+MIGRATIONS = sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
 TYPES_TS = ROOT / "src" / "lib" / "types.ts"
 SEED_PY = ROOT / "scripts" / "05_seed_supabase.py"
 
@@ -45,10 +45,12 @@ def main() -> int:
         except (AttributeError, ValueError):
             pass
 
-    sql = MIGRATION.read_text(encoding="utf-8")
+    # Later migrations redefine functions and rename columns, so the contracts
+    # have to be checked against the concatenation, with the last word winning.
+    sql = chr(10).join(path.read_text(encoding="utf-8") for path in MIGRATIONS)
     problems: list = []
 
-    print("1. does the migration parse?")
+    print("1. does the migration parse?  (%d files)" % len(MIGRATIONS))
     try:
         statements = parse_sql(sql)
         print("  ok    %d statements" % len(statements))
@@ -74,11 +76,13 @@ def main() -> int:
     print("\n3. do RETURNS TABLE and SELECT agree on column count?")
     declared_columns: dict = {}
     for name in RPCS:
-        block = re.search(
+        # 0002 redefines all three, so take the LAST definition, not the first.
+        blocks = list(re.finditer(
             r"function\s+%s\(.*?returns table \((.*?)\n\)\s*\nlanguage.*?as \$\$(.*?)\$\$;" % name,
             sql,
             re.S | re.I,
-        )
+        ))
+        block = blocks[-1] if blocks else None
         if not block:
             fail(problems, "cannot find function %s" % name)
             continue
@@ -142,6 +146,12 @@ def main() -> int:
     table_columns = set(
         re.findall(r"^\s{2}(\w+)\s+\S", table.group(1), re.M)
     ) if table else set()
+    # Apply any rename a later migration performs.
+    for old_name, new_name in re.findall(
+        r"alter table places rename column (\w+) to (\w+);", sql
+    ):
+        table_columns.discard(old_name)
+        table_columns.add(new_name)
     seed_src = SEED_PY.read_text(encoding="utf-8")
     seed_block = re.search(r"COLUMNS = \[(.*?)\]", seed_src, re.S)
     seed_columns = set(re.findall(r'"(\w+)"', seed_block.group(1))) if seed_block else set()

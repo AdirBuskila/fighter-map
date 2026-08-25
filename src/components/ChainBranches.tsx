@@ -1,6 +1,5 @@
 "use client";
 
-import { useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useState } from "react";
 import { currentPosition } from "@/lib/geo";
 import type { EphemeralBranch, Place } from "@/lib/types";
@@ -17,54 +16,51 @@ type Props = {
  * thrown away when they navigate. Nothing found here is ever written back.
  */
 export default function ChainBranches({ place, onBranches }: Props) {
-  const placesLib = useMapsLibrary("places");
   const [busy, setBusy] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function findNearby() {
-    if (!placesLib?.Place) {
-      setError("המפה עוד נטענת. נסו שוב בעוד רגע");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
       const centre = await currentPosition();
-      const { places: found } = await placesLib.Place.searchByText({
-        textQuery: place.name_en ?? place.name_he,
-        fields: ["id", "displayName", "formattedAddress", "location"],
-        locationBias: { center: centre, radius: 20000 },
-        language: "he",
-        region: "il",
-        maxResultCount: 12,
+      const params = new URLSearchParams({
+        q: place.name_en ?? place.name_he,
+        limit: "12",
+        lat: String(centre.lat),
+        lng: String(centre.lng),
       });
+      const response = await fetch(`/api/search?${params}`);
+      const body = (await response.json()) as {
+        results?: Array<{
+          providerRef: string;
+          name: string;
+          address: string | null;
+          lat: number;
+          lng: number;
+        }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "החיפוש נכשל");
 
-      const branches: EphemeralBranch[] = found.flatMap((result) =>
-        result.location
-          ? [
-              {
-                key: `${place.id}:${result.id}`,
-                name: result.displayName ?? place.name_he,
-                address: result.formattedAddress ?? null,
-                lat: result.location.lat(),
-                lng: result.location.lng(),
-                brandId: place.id,
-              },
-            ]
-          : [],
-      );
+      const branches: EphemeralBranch[] = (body.results ?? []).map((result) => ({
+        key: `${place.id}:${result.providerRef}`,
+        name: result.name,
+        address: result.address,
+        lat: result.lat,
+        lng: result.lng,
+        brandId: place.id,
+      }));
 
       setCount(branches.length);
       onBranches?.(place, branches);
       if (branches.length === 0) {
-        setError("לא מצאנו סניפים ברדיוס 20 קילומטר מכם");
+        setError("לא מצאנו סניפים קרובים אליכם");
       }
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? cause.message
-          : "החיפוש נכשל. נסו שוב בעוד רגע",
+        cause instanceof Error ? cause.message : "החיפוש נכשל. נסו שוב בעוד רגע",
       );
     } finally {
       setBusy(false);

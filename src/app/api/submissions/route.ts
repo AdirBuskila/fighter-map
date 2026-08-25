@@ -11,10 +11,10 @@ import {
 /**
  * A new place from /add.
  *
- * If the google_place_id is already known this is not a second row, it is
+ * If the provider ref is already known this is not a second row, it is
  * another person vouching for the same shop, so it becomes a confirmation.
  * That is the whole reason the submission form refuses free text: identity has
- * to come from Google or the dataset silently forks.
+ * to come from the search provider, or the dataset silently forks.
  */
 export async function POST(request: Request) {
   if (!supabaseConfigured) return jsonError("בסיס הנתונים לא מחובר", 503);
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   const { data: existing, error: lookupError } = await supabase
     .from("places")
     .select("id, status, benefit_fighter_card, benefit_vacation_voucher")
-    .eq("google_place_id", input.googlePlaceId)
+    .eq("provider_ref", input.providerRef)
     .maybeSingle();
 
   if (lookupError) {
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
   const { data: created, error: insertError } = await supabase
     .from("places")
     .insert({
-      google_place_id: input.googlePlaceId,
+      provider_ref: input.providerRef,
       name_he: input.nameHe,
       category: input.category,
       is_chain: false,

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
-import { LEGAL_NOTICE } from "@/lib/types";
+import { CONTACT_EMAIL, CONTACT_MAILTO, LEGAL_NOTICE } from "@/lib/types";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -80,6 +80,15 @@ function SiteFooter() {
           style={{ fontSize: "var(--text-xs)", lineHeight: 1.6 }}
         >
           {LEGAL_NOTICE}
+        </p>
+        <p
+          className="mt-2 text-ink-soft"
+          style={{ fontSize: "var(--text-xs)", lineHeight: 1.6 }}
+        >
+          חסר מקום, יש הערה או רעיון לשיפור? כתבו לנו ל{" "}
+          <a className="font-semibold underline" href={CONTACT_MAILTO} dir="ltr">
+            {CONTACT_EMAIL}
+          </a>
         </p>
         <p className="mt-2 text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
           לא קשור למשרד הביטחון, לפייטר או למנפיק הכרטיס.{" "}

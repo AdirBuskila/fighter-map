@@ -1,6 +1,5 @@
 "use client";
 
-import { APIProvider } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import PlacePicker, { type PickedPlace } from "./PlacePicker";
@@ -10,13 +9,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, type Category } from "@/lib/types";
 const NOTE_LIMIT = 200;
 
 export default function AddPlaceForm() {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
-  if (!apiKey) return <MissingKey />;
-  return (
-    <APIProvider apiKey={apiKey} language="he" region="IL" libraries={["places"]}>
-      <Form />
-    </APIProvider>
-  );
+  return <Form />;
 }
 
 function Form() {
@@ -55,7 +48,7 @@ function Form() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          googlePlaceId: picked.googlePlaceId,
+          providerRef: picked.providerRef,
           nameHe: picked.nameHe,
           lat: picked.lat,
           lng: picked.lng,
@@ -256,19 +249,5 @@ function BenefitCheck({
       <span aria-hidden="true" className={`mark mark-${mark}`} />
       <span className="font-semibold">{label}</span>
     </label>
-  );
-}
-
-function MissingKey() {
-  return (
-    <div className="border-2 border-line-strong p-4">
-      <p className="font-bold" style={{ fontSize: "var(--text-lg)" }}>
-        אי אפשר להוסיף מקום כרגע
-      </p>
-      <p className="mt-2 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
-        חסר מפתח Google Maps לדפדפן. הוסיפו NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY
-        לקובץ env.local, ודאו שה Places API פעיל, והריצו מחדש את npm run dev.
-      </p>
-    </div>
   );
 }

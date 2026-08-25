@@ -16,12 +16,12 @@ export type ReportInput = z.infer<typeof reportInput>;
 /**
  * A new place from /add.
  *
- * googlePlaceId is required and comes from the Autocomplete selection, never
- * from typing. That is what keeps the dataset joinable: two people submitting
- * the same shop land on the same row instead of creating a near-duplicate.
+ * providerRef is required and comes from picking a search result, never from
+ * typing. That is what keeps the dataset joinable: two people submitting the
+ * same shop land on the same row instead of creating a near-duplicate.
  */
 export const submissionInput = z.object({
-  googlePlaceId: z.string().min(1, "צריך לבחור מקום מהרשימה"),
+  providerRef: z.string().min(1, "צריך לבחור מקום מהרשימה"),
   nameHe: z.string().trim().min(1, "חסר שם המקום").max(160),
   lat: z.number().gte(-90).lte(90),
   lng: z.number().gte(-180).lte(180),

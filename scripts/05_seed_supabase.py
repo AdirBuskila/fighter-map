@@ -37,7 +37,7 @@ BATCH = 250
 # Columns the import owns. Anything not listed here is left to the site: the
 # trust counters, the timestamps people generate, the moderator's decisions.
 COLUMNS = [
-    "source_key", "google_place_id", "name_he", "name_en", "category",
+    "source_key", "provider_ref", "name_he", "name_en", "category",
     "is_chain", "is_online", "location", "address_he", "city", "phone", "url",
     "benefit_fighter_card", "benefit_vacation_voucher", "note_he", "source",
     "status", "review_reason", "first_reported_at",
@@ -45,8 +45,8 @@ COLUMNS = [
 
 
 def source_key(place: dict) -> str:
-    if place.get("google_place_id"):
-        return place["google_place_id"]
+    if place.get("provider_ref"):
+        return place["provider_ref"]
     prefix = "chain" if place.get("is_chain") else "online" if place.get("is_online") else "unlocated"
     slug = re.sub(r"\s+", " ", place["name_he"]).strip().lower()
     city = (place.get("city") or "").strip().lower()
@@ -61,7 +61,7 @@ def to_row(place: dict, status: str) -> dict:
 
     return {
         "source_key": source_key(place),
-        "google_place_id": place.get("google_place_id"),
+        "provider_ref": place.get("provider_ref"),
         "name_he": place["name_he"][:160],
         "name_en": place.get("name_en"),
         "category": place["category"],

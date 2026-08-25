@@ -49,11 +49,11 @@ do $$ begin raise notice E'\nA. somebody adds a place'; end $$;
 
 -- Exactly what /api/submissions inserts for a place nobody has reported yet.
 insert into places (
-  id, google_place_id, source_key, name_he, category, is_chain, is_online,
+  id, provider_ref, source_key, name_he, category, is_chain, is_online,
   location, address_he, city, benefit_fighter_card, benefit_vacation_voucher,
   source, status, first_reported_at
 ) values (
-  '11111111-1111-1111-1111-111111111111', 'ChIJ_test_burger', 'ChIJ_test_burger',
+  '11111111-1111-1111-1111-111111111111', 'osm:node/999001', 'osm:node/999001',
   'בורגר בדיקה', 'restaurant', false, false,
   'SRID=4326;POINT(34.7818 32.0853)', 'דיזנגוף 1, תל אביב', 'תל אביב',
   true, false, 'user_submission', 'pending', now()
@@ -86,13 +86,13 @@ select assert_eq((select last_confirmed_at is not null from places where id = '1
                  true, 'last_confirmed_at is stamped');
 
 -- The same place submitted again must collide, which is why the route looks it
--- up by google_place_id first and turns the second submission into a confirm.
+-- up by provider_ref first and turns the second submission into a confirm.
 select assert_raises(
-  $q$insert into places (google_place_id, source_key, name_he, category, location,
+  $q$insert into places (provider_ref, source_key, name_he, category, location,
                          benefit_fighter_card, source, status)
-     values ('ChIJ_test_burger', 'dupe', 'בורגר בדיקה', 'restaurant',
+     values ('osm:node/999001', 'dupe', 'בורגר בדיקה', 'restaurant',
              'SRID=4326;POINT(34.78 32.08)', true, 'user_submission', 'pending')$q$,
-  'a duplicate google_place_id cannot create a second row');
+  'a duplicate provider_ref cannot create a second row');
 
 -- ===========================================================================
 do $$ begin raise notice E'\nB. somebody reports it stopped working'; end $$;

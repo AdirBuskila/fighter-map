@@ -30,35 +30,22 @@ you. Work down the list; each step says how to check it worked.
    Check: `select postgis_version();` returns a version, and
    `select count(*) from places;` returns 0.
 
-### 2. Google Cloud, two keys
+### 2. Nothing. There is no map account to create.
 
-Create one project, enable **Places API (New)** and **Maps JavaScript API**,
-then create two separate keys. One key restricted two ways is a key restricted
-neither way.
+The map is [OpenFreeMap](https://openfreemap.org/) vector tiles rendered by
+MapLibre, and place search is [Photon](https://photon.komoot.io/), OSM's
+typeahead geocoder. Neither takes an API key, a billing account or a card, so
+there is nothing to sign up for and nothing that can run up a bill.
 
-| Key | Restriction | APIs | Goes in |
-|---|---|---|---|
-| Server | IP address, your machine and any CI runner | Places API (New) | `GOOGLE_MAPS_SERVER_KEY` |
-| Browser | HTTP referrer: `localhost:3000/*` and your Vercel domain | Maps JavaScript API, Places API (New) | `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` |
+The basemap styles live in `public/map/light.json` and `dark.json`. They are
+ours, not a vendor default: coastline, road network and town names only, so the
+only colour on the map is our own dots. `design/README.md` explains each rule.
 
-Then Google Maps Platform → Map Management → create a **Map ID** with the
-JavaScript / vector renderer, and put it in
-`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Advanced markers do not render without one;
-the app falls back to `DEMO_MAP_ID`, which is watermarked.
-
-While you are in there, import the two basemap styles from `design/` and
-associate them with that Map ID. They strip Google's POI pins, transit lines
-and road labels so the only colour on the map is our own dots, which is what
-makes the two benefit colours readable at 10px. `design/README.md` has the
-steps and the reasoning. The map works without them; it just looks like
-everyone else's.
-
-Set a **budget alert** before you run the geocoder. It makes exactly 610 Text
-Search calls on the first pass and zero on every rerun, because every response
-is cached to `data/geocode_cache.json`. The field mask asks for `location` and
-`displayName`, which puts it on the Pro tier: 610 × $32/1000 ≈ **$19.50**,
-inside Google's $200 monthly credit. 499 of the 610 queries carry a city, the
-rest are a name biased to Israel.
+Seed geocoding does not call anything either. `03a_osm_extract.py` downloads a
+119 MB Geofabrik extract once and builds a local index of every named business
+in Israel; `03_locate.py` matches against it offline. Retries are free, which
+is what let the matching thresholds be tuned against real output rather than
+guessed.
 
 ### 3. Cloudflare Turnstile
 
@@ -90,9 +77,11 @@ py -3.13 -m venv .venv
 # Phase 2 - free text to canonical places (cached, no API call needed)
 ./.venv/Scripts/python.exe scripts/02_normalize.py --offline
 
-# Phase 3 - resolve to Google place ids
-export GOOGLE_MAPS_SERVER_KEY=...
-./.venv/Scripts/python.exe scripts/03_geocode.py --verbose
+# Phase 3a - build the local OSM business index (one 119 MB download)
+./.venv/Scripts/python.exe scripts/03a_osm_extract.py
+
+# Phase 3b - match places against it, entirely offline
+./.venv/Scripts/python.exe scripts/03_locate.py --verbose
 
 # Load it
 export NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
@@ -174,16 +163,17 @@ data/raw_rows.json                     759 rows
   v
 data/normalized.json                   857 places
 data/needs_review.json                 low confidence, for /admin
-  |  03_geocode.py     Places API Text Search, place_id becomes the key
+  |  03a_osm_extract.py  30,270 named businesses in Israel, from OSM
+  |  03_locate.py        matched locally, the OSM ref becomes the key
   v
-data/places.json
+data/places.json                       181 located, 429 to review
   |  05_seed_supabase.py
   v
 Supabase -> the app
 ```
 
 Nothing under `data/` is committed, and neither is `fighter.pdf`. Both carry
-private individuals' mobile numbers verbatim.
+private individuals' mobile numbers verbatim, and the OSM extract is 119 MB.
 
 ## Trust rules
 

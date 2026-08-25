@@ -63,12 +63,23 @@ export function wazeUrl(place: Place): string {
   return `https://waze.com/ul?q=${encodeURIComponent(place.name_he)}`;
 }
 
+/**
+ * Deep links out. These are plain URLs, not API calls: no key, no billing, no
+ * account. Coordinates beat a name search when we have them, because a name
+ * search lands the reader on whichever branch the provider feels like.
+ */
 export function googleMapsUrl(place: Place): string {
-  if (place.google_place_id) {
-    const query = encodeURIComponent(place.name_he);
-    return `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${place.google_place_id}`;
+  if (place.lat != null && place.lng != null) {
+    const label = encodeURIComponent(place.name_he);
+    return `https://www.google.com/maps/search/?api=1&query=${place.lat}%2C${place.lng}&query=${label}`;
   }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name_he)}`;
+}
+
+/** The place as OpenStreetMap knows it, so a reader can fix a wrong pin. */
+export function osmUrl(place: Place): string | null {
+  if (!place.provider_ref?.startsWith("osm:")) return null;
+  return `https://www.openstreetmap.org/${place.provider_ref.slice(4)}`;
 }
 
 export function telHref(phone: string): string {
