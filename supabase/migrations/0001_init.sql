@@ -94,6 +94,10 @@ create table if not exists reports (
   benefit_type text,
   note         text,
   created_at   timestamptz not null default now(),
+  -- Set when a moderator restores a place. The old failure reports stay for
+  -- the record but stop counting, otherwise the next single report would
+  -- recompute the same total and immediately re-flip the place.
+  superseded_at timestamptz,
   ip_hash      text not null,
 
   constraint reports_kind_check
@@ -105,7 +109,8 @@ create table if not exists reports (
     check (note is null or char_length(note) <= 200)
 );
 
-create index if not exists reports_place_idx on reports (place_id, kind, created_at desc);
+create index if not exists reports_place_idx
+  on reports (place_id, kind, created_at desc) where superseded_at is null;
 create index if not exists reports_rate_idx on reports (ip_hash, created_at desc);
 
 -- ------------------------------------------------------------ trust rules
@@ -117,33 +122,43 @@ security definer
 set search_path = public, extensions
 as $$
 declare
-  confirms   int;
+  vouches    int;
   failures   int;
   cur_status text;
 begin
   select status into cur_status from places where id = new.place_id;
 
-  if new.kind = 'confirm' then
-    -- "Independent" means a distinct reporter, so count IP hashes, not rows.
-    select count(distinct ip_hash) into confirms
-      from reports where place_id = new.place_id and kind = 'confirm';
+  if new.kind in ('confirm', 'new_submission') then
+    -- "Independent" means a distinct person, so count reporters, not rows.
+    -- The submission itself counts as its author vouching for the place:
+    -- requiring two further confirmations would mean three people before
+    -- anything reaches the map, and on a community tool this size nothing
+    -- would ever get there. Submitter plus one corroborator is two
+    -- independent people, which is what the rule is protecting against.
+    select count(distinct ip_hash) into vouches
+      from reports
+     where place_id = new.place_id
+       and kind in ('confirm', 'new_submission')
+       and superseded_at is null;
 
     update places
-       set confirm_count    = confirms,
+       set confirm_count     = vouches,
            last_confirmed_at = now(),
-           -- A user submission earns its way onto the map at two independent
-           -- confirmations. Nothing else about status changes here: a place
-           -- flipped to reported_not_working stays that way until a human
-           -- looks at it, and /admin surfaces the ones getting confirms again.
-           status = case when cur_status = 'pending' and confirms >= 2
+           -- Nothing else about status changes here. A place flipped to
+           -- reported_not_working stays that way until a human looks at it,
+           -- and /admin surfaces the ones collecting confirmations again.
+           status = case when cur_status = 'pending' and vouches >= 2
                          then 'published' else cur_status end
      where id = new.place_id;
 
   elsif new.kind = 'not_working' then
-    select count(*) into failures
+    -- Distinct reporters here too. Counting rows would let one person flip
+    -- any place off the map by tapping the button three times.
+    select count(distinct ip_hash) into failures
       from reports
      where place_id = new.place_id
        and kind = 'not_working'
+       and superseded_at is null
        and created_at > now() - interval '60 days';
 
     update places

@@ -99,7 +99,7 @@ function Form() {
         <p className="mt-2 text-ink-soft" style={{ fontSize: "var(--text-base)" }}>
           {done === "confirmed_existing"
             ? "עדכנו את סוגי ההטבה לפי מה שסימנתם."
-            : "המקום יופיע במפה אחרי שעוד שני אנשים יאשרו שההטבה עבדה שם."}
+            : "המקום יופיע במפה אחרי שעוד אדם אחד יאשר שההטבה עבדה שם."}
         </p>
         <div className="mt-6 flex gap-2">
           <button

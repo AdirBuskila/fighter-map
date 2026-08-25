@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const placeId = input.placeId!;
+  const placeId = input.placeId as string;
   let update: Record<string, unknown> = {};
 
   if (input.action === "approve") {
@@ -76,6 +76,18 @@ export async function POST(request: Request) {
   } else if (input.action === "reject") {
     update = { status: "rejected" };
   } else if (input.action === "restore") {
+    // Retire the failure reports that caused the flip. Without this the next
+    // single report recounts them and puts the place straight back.
+    const { error: supersedeError } = await supabase
+      .from("reports")
+      .update({ superseded_at: new Date().toISOString() })
+      .eq("place_id", placeId)
+      .eq("kind", "not_working")
+      .is("superseded_at", null);
+    if (supersedeError) {
+      console.error("supersede failed", supersedeError.message);
+      return jsonError("לא הצלחנו לאפס את הדיווחים. נסו שוב", 500);
+    }
     update = { status: "published", report_count: 0, review_reason: null };
   } else {
     const patch = input.patch ?? {};

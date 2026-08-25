@@ -13,7 +13,13 @@ type Sent = "confirm" | "not_working" | null;
  * dataset and slow rot. It answers one question in one tap, from a phone, held
  * in one hand, outside a shop.
  */
-export default function VerdictButtons({ place }: { place: Place }) {
+export default function VerdictButtons({
+  place,
+  compact = false,
+}: {
+  place: Place;
+  compact?: boolean;
+}) {
   const [sent, setSent] = useState<Sent>(null);
   const [busy, setBusy] = useState<Sent>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,9 +85,11 @@ export default function VerdictButtons({ place }: { place: Place }) {
 
   return (
     <div>
-      <p className="mb-2 font-bold" style={{ fontSize: "var(--text-base)" }}>
-        הייתם כאן? עדכנו את השאר
-      </p>
+      {!compact && (
+        <p className="mb-2 font-bold" style={{ fontSize: "var(--text-base)" }}>
+          הייתם כאן? עדכנו את השאר
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

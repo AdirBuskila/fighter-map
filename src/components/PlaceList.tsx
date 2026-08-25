@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { BenefitChips, KindChip, LastSignalLine, StatusBadges } from "./Badges";
 import ChainBranches from "./ChainBranches";
+import VerdictButtons from "./VerdictButtons";
 import { formatDistance, isUnverified } from "@/lib/format";
 import { CATEGORY_LABELS, type EphemeralBranch, type Place } from "@/lib/types";
 
@@ -131,17 +132,23 @@ export default function PlaceList({
             </div>
 
             {selected && (
-              <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
-                <Link
-                  href={`/place/${place.id}`}
-                  className="btn btn-primary px-3"
-                  style={{ fontSize: "var(--text-sm)" }}
-                >
-                  פרטים ודיווח
-                </Link>
-                {place.is_chain && (
-                  <ChainBranches place={place} onBranches={onBranches} />
-                )}
+              <div className="px-3 pb-3">
+                {/* Both actions the dataset depends on live here, one tap from
+                    the map. Burying "it stopped working" behind a detail page
+                    is how a map slowly fills with places that closed. */}
+                <VerdictButtons place={place} compact />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/place/${place.id}`}
+                    className="btn px-3"
+                    style={{ fontSize: "var(--text-sm)" }}
+                  >
+                    ניווט ופרטים
+                  </Link>
+                  {place.is_chain && (
+                    <ChainBranches place={place} onBranches={onBranches} />
+                  )}
+                </div>
               </div>
             )}
           </li>
