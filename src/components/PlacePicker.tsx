@@ -19,41 +19,13 @@ export type PickedPlace = {
 /**
  * Google's PlaceAutocompleteElement, restricted to Israel.
  *
- * Deliberately not a text input. Identity has to come from Google or two
- * people reporting the same shop create two rows that can never be joined, and
- * the whole "is it worth walking in" question stops having a single answer.
+ * Deliberately not a text input. Identity has to come from Google, or two
+ * people reporting the same shop create two rows that can never be joined and
+ * "is it worth walking in" stops having a single answer.
  *
- * This is a web component that Google renders itself, so it is mounted
- * imperatively into a host div. The element's own typings are still catching
- * up with the API, hence the narrow local interfaces rather than `any`.
+ * It is a web component Google renders itself, so it is mounted imperatively
+ * into a host div rather than returned from JSX.
  */
-
-type Prediction = {
-  toPlace: () => GooglePlace;
-};
-
-type GooglePlace = {
-  id: string;
-  displayName?: string | null;
-  formattedAddress?: string | null;
-  location?: { lat: () => number; lng: () => number } | null;
-  types?: string[] | null;
-  fetchFields: (options: { fields: string[] }) => Promise<unknown>;
-};
-
-type SelectEvent = Event & { placePrediction?: Prediction };
-
-type AutocompleteElement = HTMLElement & {
-  includedRegionCodes?: string[];
-  locationBias?: unknown;
-  requestedLanguage?: string;
-  requestedRegion?: string;
-};
-
-type PlacesLibrary = google.maps.PlacesLibrary & {
-  PlaceAutocompleteElement: new (options?: Record<string, unknown>) => AutocompleteElement;
-};
-
 export default function PlacePicker({
   onPick,
   onClear,
@@ -61,7 +33,7 @@ export default function PlacePicker({
   onPick: (place: PickedPlace) => void;
   onClear: () => void;
 }) {
-  const placesLib = useMapsLibrary("places") as PlacesLibrary | null;
+  const placesLib = useMapsLibrary("places");
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -69,7 +41,7 @@ export default function PlacePicker({
   useEffect(() => {
     const container = host.current;
     if (!placesLib || !container) return;
-    if (!("PlaceAutocompleteElement" in placesLib)) {
+    if (!placesLib.PlaceAutocompleteElement) {
       setError("החיפוש לא נטען. ודאו שה Places API פעיל במפתח של הדפדפן");
       return;
     }
@@ -80,26 +52,23 @@ export default function PlacePicker({
       requestedRegion: "IL",
     });
     element.id = "place-picker-input";
-    element.setAttribute("style", "width:100%");
+    element.style.width = "100%";
     container.replaceChildren(element);
     setReady(true);
 
     // Bias suggestions to wherever the reader is standing, which is almost
-    // always the shop they are about to report. Failure here is not worth
-    // showing: the search still works country-wide.
+    // always the shop they are about to report. A refusal here is not worth
+    // surfacing: the search still works country-wide.
     void currentPosition()
       .then((position) => {
         element.locationBias = { center: position, radius: 20000 };
       })
       .catch(() => undefined);
 
-    async function handleSelect(event: Event) {
-      const prediction = (event as SelectEvent).placePrediction;
-      if (!prediction) return;
+    async function handleSelect(event: google.maps.places.PlacePredictionSelectEvent) {
       setError(null);
       try {
-        const place = prediction.toPlace();
-        await place.fetchFields({
+        const { place } = await event.placePrediction.toPlace().fetchFields({
           fields: ["id", "displayName", "formattedAddress", "location", "types"],
         });
         if (!place.location) {
@@ -122,13 +91,20 @@ export default function PlacePicker({
     }
 
     function handleInput() {
+      // Typing after a pick invalidates it: the form must not submit a
+      // place_id that no longer matches what the box says.
       onClear();
     }
 
-    element.addEventListener("gmp-select", handleSelect);
+    // The element's typed addEventListener overload is not exposed on the
+    // constructed instance, so the cast happens here, at the boundary. The
+    // event type itself is checked: PlaceAutocompleteElementEventMap in
+    // @types/google.maps maps "gmp-select" to PlacePredictionSelectEvent.
+    const selectListener = handleSelect as unknown as EventListener;
+    element.addEventListener("gmp-select", selectListener);
     element.addEventListener("input", handleInput);
     return () => {
-      element.removeEventListener("gmp-select", handleSelect);
+      element.removeEventListener("gmp-select", selectListener);
       element.removeEventListener("input", handleInput);
       container.replaceChildren();
     };

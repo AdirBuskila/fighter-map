@@ -94,7 +94,13 @@ function Pins({
     <>
       {origin && (
         <AdvancedMarker position={origin} title="המיקום שלכם" zIndex={1}>
-          <span className="block h-3.5 w-3.5 rounded-full border-2 border-white bg-ink shadow-[0_0_0_3px_rgba(27,79,216,0.35)]" />
+          <span
+            className="block h-3.5 w-3.5 rounded-full border-2 border-white"
+            style={{
+              background: "var(--ink)",
+              boxShadow: "0 0 0 3px color-mix(in srgb, var(--fighter) 40%, transparent)",
+            }}
+          />
         </AdvancedMarker>
       )}
 

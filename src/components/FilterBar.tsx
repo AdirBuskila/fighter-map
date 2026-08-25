@@ -44,7 +44,8 @@ export default function FilterBar({
         <div
           role="radiogroup"
           aria-label="סוג הטבה"
-          className="flex overflow-hidden rounded-[--radius] border-2 border-line-strong"
+          className="flex overflow-hidden border-2 border-line-strong"
+          style={{ borderRadius: "var(--radius)" }}
         >
           <SegmentButton
             selected={filters.benefit === null}

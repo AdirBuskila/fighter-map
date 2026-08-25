@@ -23,7 +23,7 @@ export default function ChainBranches({ place, onBranches }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   async function findNearby() {
-    if (!placesLib) {
+    if (!placesLib?.Place) {
       setError("המפה עוד נטענת. נסו שוב בעוד רגע");
       return;
     }
@@ -40,16 +40,20 @@ export default function ChainBranches({ place, onBranches }: Props) {
         maxResultCount: 12,
       });
 
-      const branches: EphemeralBranch[] = found
-        .filter((result) => result.location)
-        .map((result) => ({
-          key: `${place.id}:${result.id}`,
-          name: result.displayName ?? place.name_he,
-          address: result.formattedAddress ?? null,
-          lat: result.location!.lat(),
-          lng: result.location!.lng(),
-          brandId: place.id,
-        }));
+      const branches: EphemeralBranch[] = found.flatMap((result) =>
+        result.location
+          ? [
+              {
+                key: `${place.id}:${result.id}`,
+                name: result.displayName ?? place.name_he,
+                address: result.formattedAddress ?? null,
+                lat: result.location.lat(),
+                lng: result.location.lng(),
+                brandId: place.id,
+              },
+            ]
+          : [],
+      );
 
       setCount(branches.length);
       onBranches?.(place, branches);
