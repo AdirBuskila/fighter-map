@@ -406,15 +406,41 @@ def dedup_group(place: dict) -> str:
     return "loc:" + canon(place.get("city") or "")
 
 
-def merge_places(places: list, threshold: int) -> list:
-    """Fuzzy-merge by name, keeping the widest set of benefits and dates.
+def same_place(a: dict, b: dict, threshold: int) -> bool:
+    """Is this the same business under two spellings?
 
-    A national chain merges on brand alone. A single location must also agree
-    on city, otherwise `לחם בשר` would swallow `לחם בשר ירושלים`: token_set_ratio
-    scores a subset as a perfect 100.
+    token_set_ratio alone is not enough: it scores a subset as a perfect 100, so
+    `מלון דן` would swallow `מלון דן פנורמה` and `BBB` would swallow `BBB Kids`.
+    Requiring token_sort_ratio as well restores length sensitivity. Cross-script
+    matching is deliberately NOT fuzzy - a vowel-free consonant skeleton makes
+    short names collide (`H&O` scored against `S.H Grooming`), so Hebrew and
+    Latin spellings meet only through the alias table or an identical name_en.
+
+    Anything this misses is not lost: Phase 3 resolves single locations to a
+    Google place_id, which is unique in the database and merges them there.
     """
     from rapidfuzz import fuzz
 
+    if a.get("alias") and a["alias"] == b.get("alias"):
+        return True
+    en_a, en_b = canon(a.get("name_en") or ""), canon(b.get("name_en") or "")
+    if en_a and en_a == en_b:
+        return True
+    na, nb = canon(a["name_he"]), canon(b["name_he"])
+    if na == nb:
+        return True
+    return (
+        fuzz.token_set_ratio(na, nb) >= threshold
+        and fuzz.token_sort_ratio(na, nb) >= threshold
+    )
+
+
+def merge_places(places: list, threshold: int) -> list:
+    """Fuzzy-merge by name, keeping the widest set of benefits and dates.
+
+    A national chain merges on brand alone. A single location must also agree on
+    city, otherwise `לחם בשר` and `לחם בשר ירושלים` collapse into one card.
+    """
     groups = defaultdict(list)
     for p in places:
         groups[dedup_group(p)].append(p)
@@ -425,20 +451,7 @@ def merge_places(places: list, threshold: int) -> list:
         group.sort(key=lambda p: (-len(p["name_he"]), p["name_he"]))
         clusters = []
         for p in group:
-            target = None
-            for cluster in clusters:
-                head = cluster[0]
-                if p.get("alias") and p["alias"] == head.get("alias"):
-                    target = cluster
-                    break
-                names = fuzz.token_set_ratio(canon(p["name_he"]), canon(head["name_he"]))
-                skel = fuzz.token_set_ratio(skeleton(p["name_he"]), skeleton(head["name_he"]))
-                latin = 0
-                if p.get("name_en") and head.get("name_en"):
-                    latin = fuzz.token_set_ratio(canon(p["name_en"]), canon(head["name_en"]))
-                if max(names, skel, latin) >= threshold:
-                    target = cluster
-                    break
+            target = next((c for c in clusters if same_place(p, c[0], threshold)), None)
             if target is not None:
                 target.append(p)
             else:
