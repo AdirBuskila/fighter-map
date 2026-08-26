@@ -117,8 +117,13 @@ export default function Explorer({ mapped, unmapped }: Props) {
           child it grew to the height of all 417 list rows, 60,000px, WebGL
           clamped the canvas to 4096 and exactly one tile ever loaded. It gets
           its own height at both breakpoints, and sticks on desktop so it stays
-          in view while the list scrolls the page. */}
-      <div className="h-[60vh] shrink-0 self-start lg:sticky lg:h-[calc(100dvh-var(--header-h))] lg:top-[var(--header-h)] lg:w-[58%] lg:flex-1">
+          in view while the list scrolls the page.
+
+          self-start is lg-only on purpose. In the mobile column layout
+          align-self controls the HORIZONTAL axis, so it collapsed the pane to
+          zero width: tiles loaded, style resolved, pins rendered, into a box
+          0px wide. */}
+      <div className="h-[60vh] shrink-0 lg:self-start lg:sticky lg:h-[calc(100dvh-var(--header-h))] lg:top-[var(--header-h)] lg:w-[58%] lg:flex-1">
         <MapView
           places={visibleMapped}
           branches={branches}

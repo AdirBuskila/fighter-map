@@ -71,7 +71,14 @@
 
   --focus: #1b4fd8;
   --radius: 4px;
-  --header-h: 3.5rem;
+  --header-h: 3.75rem;
+
+  /* The masthead is a sign panel, so it keeps its own deep blue in both
+     themes rather than following the accent. A light blue bar across the top
+     of a dark page reads as a mistake. */
+  --masthead: #143fb0;
+  --on-masthead: #ffffff;
+  --masthead-keyline: rgba(255, 255, 255, 0.42);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -100,6 +107,10 @@
     --ok-tint: #13291d;
 
     --focus: #7da5ff;
+
+    --masthead: #0f1b33;
+    --on-masthead: #eaf0fb;
+    --masthead-keyline: rgba(160, 190, 255, 0.34);
   }
 }
 
@@ -263,7 +274,100 @@ label.tap {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   The masthead.
+
+   A road sign is a coloured panel with a white rule set in from its edge. That
+   keyline is the single most recognisable thing about the form, more than any
+   colour, and the app claimed signage in a comment while showing none of it.
+   Here it is, doing the one job a masthead has: saying what this is.
+   --------------------------------------------------------------------------- */
+
+.masthead {
+  position: relative;
+  background: var(--masthead);
+  color: var(--on-masthead);
+}
+.masthead::after {
+  content: "";
+  position: absolute;
+  inset: 5px 8px;
+  border: 1px solid var(--masthead-keyline);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.masthead a {
+  color: inherit;
+}
+
+/* The mark: the two benefit shapes locked up as one glyph. It is the legend
+   for the whole map, so it belongs in the masthead rather than a logo. */
+.brandmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.28rem 0.42rem;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  line-height: 1;
+}
+.brandmark span {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: currentColor;
+}
+.brandmark span:first-child {
+  border-radius: 50%;
+}
+.brandmark span:last-child {
+  transform: rotate(45deg);
+}
+
+.masthead-cta {
+  border: 2px solid var(--on-masthead);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--on-masthead);
+  font-weight: 700;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.masthead-cta:hover {
+  background: var(--on-masthead);
+  color: var(--masthead);
+}
+
 /* --------------------------------------------------------------- utilities */
+
+.rail {
+  position: relative;
+}
+.rail::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--rail-color, transparent);
+}
+.rail-fighter { --rail-color: var(--fighter); }
+.rail-voucher { --rail-color: var(--voucher); }
+.rail-both {
+  --rail-color: var(--fighter);
+}
+.rail-both::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--voucher) 0 7px,
+    transparent 7px 14px
+  );
+}
+.rail-dead { --rail-color: var(--line-strong); }
 
 .hairline {
   border-bottom: 1px solid var(--line);
@@ -432,6 +536,14 @@ label.tap {
 .maplibregl-ctrl-group button span {
   filter: var(--map-ctrl-filter, none);
 }
+/* One line, always. On a phone the credit wrapped and covered the map. */
+.maplibregl-ctrl-attrib-inner {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 62vw;
+}
+
 .maplibregl-ctrl-attrib {
   background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
   color: var(--ink-soft) !important;

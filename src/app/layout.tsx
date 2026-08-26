@@ -51,21 +51,29 @@ export default function RootLayout({
 
 function SiteHeader() {
   return (
-    <header className="hairline sticky top-0 z-40 bg-surface">
+    <header className="masthead sticky top-0 z-40">
       <div
-        className="mx-auto flex w-full max-w-6xl items-center gap-3 px-3"
+        className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4"
         style={{ height: "var(--header-h)" }}
       >
-        <Link
-          href="/"
-          className="tap flex items-center gap-2 font-extrabold tracking-tight"
-          style={{ fontSize: "var(--text-lg)" }}
-        >
-          <span aria-hidden="true" className="mark mark-fighter" />
-          מפת הטבות פייטר
+        <Link href="/" className="tap flex items-center gap-2.5">
+          <span aria-hidden="true" className="brandmark">
+            <span />
+            <span />
+          </span>
+          <span
+            className="font-extrabold tracking-tight"
+            style={{ fontSize: "var(--text-lg)" }}
+          >
+            מפת הטבות פייטר
+          </span>
         </Link>
-        <nav className="mr-auto flex items-center gap-1">
-          <Link href="/add" className="btn btn-primary px-3 text-sm">
+        <nav className="mr-auto flex items-center">
+          <Link
+            href="/add"
+            className="masthead-cta tap flex items-center px-3.5"
+            style={{ fontSize: "var(--text-sm)" }}
+          >
             הוספת מקום
           </Link>
         </nav>

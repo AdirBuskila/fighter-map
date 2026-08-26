@@ -29,8 +29,12 @@ function check(label, actual, expected) {
 (async () => {
   const target = process.argv[2] || "http://localhost:3000";
   const shot = process.argv[3];
+  // A phone is the primary target: someone outside a shop deciding whether to
+  // walk in. Pass "mobile" to check that case.
+  const mobile = process.argv[4] === "mobile";
+  const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 820 };
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+  const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile });
 
   // Context level, so requests from MapLibre's worker are counted too.
   let tilesOk = 0;
@@ -64,6 +68,7 @@ function check(label, actual, expected) {
   check("canvas exists", dom.hasCanvas, true);
   check("pane has a sane height", dom.boxHeight, (h) => h > 200 && h < 2000);
   check("pane has a sane width", dom.boxWidth, (w) => w > 200 && w < 3000);
+  check("map fits the viewport", dom.boxHeight, (h) => h <= viewport.height);
   check("vector tiles actually loaded", tilesOk, (n) => n >= 4);
   check("no tile failures", tilesBad, 0);
 

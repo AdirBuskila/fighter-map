@@ -101,13 +101,7 @@ export default function MapView({
     map.current = instance;
 
     instance.addControl(new NavigationControl({ showCompass: false }), "top-left");
-    instance.addControl(
-      new AttributionControl({
-        compact: true,
-        customAttribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }),
-      "bottom-left",
-    );
+    instance.addControl(new AttributionControl({ compact: true }), "bottom-left");
 
     // Development only: lets tools/probe_map.js interrogate the live map.
     if (process.env.NODE_ENV !== "production") {
@@ -205,6 +199,14 @@ export default function MapView({
     originMarker.current?.remove();
     originMarker.current = null;
     if (!origin) return;
+
+    // Fly there. Without this the list quietly changes and the map still shows
+    // the whole country, which answers none of "what is near me".
+    instance.easeTo({
+      center: [origin.lng, origin.lat],
+      zoom: Math.max(instance.getZoom(), 11),
+      duration: prefersReducedMotion() ? 0 : 900,
+    });
 
     const dot = document.createElement("span");
     dot.className = "origin-dot";

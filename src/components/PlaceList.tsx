@@ -17,6 +17,15 @@ type Props = {
   emptyMessage: string;
 };
 
+/** Which colour runs down the edge of the row. Shape and colour again, so the
+ *  benefit is readable while scrolling without spending a chip on it. */
+function railOf(place: Place): "fighter" | "voucher" | "both" | "dead" {
+  if (place.status === "reported_not_working") return "dead";
+  if (place.benefit_fighter_card && place.benefit_vacation_voucher) return "both";
+  if (place.benefit_vacation_voucher) return "voucher";
+  return "fighter";
+}
+
 export default function PlaceList({
   places,
   selectedId,
@@ -60,7 +69,7 @@ export default function PlaceList({
               if (node) rowRefs.current.set(place.id, node);
               else rowRefs.current.delete(place.id);
             }}
-            className={selected ? "selected-panel" : undefined}
+            className={`rail rail-${railOf(place)} ${selected ? "selected-panel" : ""}`}
           >
             <div
               role="button"
@@ -73,7 +82,7 @@ export default function PlaceList({
                   onSelect(place.id, "list");
                 }
               }}
-              className="w-full cursor-pointer px-3 pb-3 pt-3 text-right"
+              className="w-full cursor-pointer py-2.5 pe-3 ps-4 text-right"
             >
               {/* Destination on the right, distance in its own column on the
                   left, exactly as a road sign sets them. The column is a fixed
@@ -98,7 +107,7 @@ export default function PlaceList({
               </div>
 
               <p
-                className="mt-0.5 text-ink-soft"
+                className="text-ink-soft"
                 style={{ fontSize: "var(--text-sm)" }}
               >
                 {[CATEGORY_LABELS[place.category], place.city]
@@ -106,30 +115,26 @@ export default function PlaceList({
                   .join(" · ")}
               </p>
 
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {/* Chips and the age of the information share one line. They
+                  were two, and on a phone that is a whole row of scrolling
+                  spent on metadata. */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
                 <BenefitChips place={place} />
                 <KindChip place={place} />
                 <StatusBadges place={place} />
-              </div>
-
-              {/* Rows without a badge are the ones nobody has confirmed here
-                  yet, which is most of the imported set. Say how old the
-                  information is instead of leaving the row silent. */}
-              {isUnverified(place) && place.status === "published" && (
-                <p className="mt-1">
+                {isUnverified(place) && place.status === "published" && (
                   <LastSignalLine place={place} />
-                </p>
-              )}
+                )}
+              </div>
 
               {place.note_he && (
                 <p
-                  className="mt-2 text-ink-soft"
+                  className="mt-1.5 text-ink-soft"
                   style={{ fontSize: "var(--text-sm)" }}
                 >
                   {place.note_he}
                 </p>
               )}
-
             </div>
 
             {selected && (
