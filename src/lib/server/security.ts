@@ -75,6 +75,45 @@ export async function verifyTurnstile(
   }
 }
 
+/**
+ * Failed admin attempts, per reporter.
+ *
+ * Deliberately in memory. Serverless gives each instance its own copy, so this
+ * does not survive a cold start and is not a real quota, which is why the
+ * password carries the actual security: 120 bits, so guessing is not a threat
+ * model. What this stops is a naive script hammering the endpoint and burning
+ * function invocations, and it costs nothing.
+ */
+const failures = new Map<string, { count: number; until: number }>();
+const LOCKOUT_AFTER = 8;
+const LOCKOUT_MS = 5 * 60 * 1000;
+
+export function adminLockedOut(ipHash: string): boolean {
+  const entry = failures.get(ipHash);
+  if (!entry) return false;
+  if (Date.now() > entry.until) {
+    failures.delete(ipHash);
+    return false;
+  }
+  return entry.count >= LOCKOUT_AFTER;
+}
+
+export function noteAdminFailure(ipHash: string): void {
+  const entry = failures.get(ipHash);
+  const count = entry && Date.now() <= entry.until ? entry.count + 1 : 1;
+  failures.set(ipHash, { count, until: Date.now() + LOCKOUT_MS });
+  // Unbounded growth would be a slow leak on a long-lived instance.
+  if (failures.size > 5000) {
+    for (const [key, value] of failures) {
+      if (Date.now() > value.until) failures.delete(key);
+    }
+  }
+}
+
+export function noteAdminSuccess(ipHash: string): void {
+  failures.delete(ipHash);
+}
+
 /** Constant-time comparison so the admin password cannot be probed by timing. */
 export function adminPasswordOk(candidate: string): boolean {
   const expected = process.env.ADMIN_PASSWORD;

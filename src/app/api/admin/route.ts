@@ -1,7 +1,14 @@
 import { revalidatePath } from "next/cache";
 import { adminActionInput, firstError } from "@/lib/schemas";
 import { serviceClient, supabaseConfigured } from "@/lib/supabase";
-import { adminPasswordOk, jsonError } from "@/lib/server/security";
+import {
+  adminLockedOut,
+  adminPasswordOk,
+  hashIp,
+  jsonError,
+  noteAdminFailure,
+  noteAdminSuccess,
+} from "@/lib/server/security";
 
 const QUEUE_COLUMNS =
   "id, provider_ref, name_he, name_en, category, is_chain, is_online," +
@@ -23,9 +30,15 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(firstError(parsed.error), 400);
   const input = parsed.data;
 
+  const ipHash = hashIp(request);
+  if (adminLockedOut(ipHash)) {
+    return jsonError("יותר מדי ניסיונות. נסו שוב בעוד כמה דקות", 429);
+  }
   if (!adminPasswordOk(input.password)) {
+    noteAdminFailure(ipHash);
     return jsonError("סיסמה שגויה", 401);
   }
+  noteAdminSuccess(ipHash);
 
   const supabase = serviceClient();
 

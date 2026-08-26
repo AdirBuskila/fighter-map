@@ -11,11 +11,34 @@ const heebo = Heebo({
   variable: "--font-heebo",
 });
 
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://fighter-map.vercel.app";
+const DESCRIPTION =
+  "איפה באמת עובד כרטיס פייטר ושובר החופשה. מפה קהילתית לפי דיווחי מילואימניקים, עם אפשרות להוסיף מקום ולדווח אם הפסיק לעבוד.";
+
 export const metadata: Metadata = {
-  title: "מפת הטבות פייטר",
-  description:
-    "מפה קהילתית של מקומות שבהם מילואימניקים הצליחו לשלם עם כרטיס פייטר או לממש שובר חופשה.",
+  metadataBase: new URL(SITE),
+  title: {
+    default: "מפת הטבות פייטר",
+    template: "%s · מפת הטבות פייטר",
+  },
+  description: DESCRIPTION,
+  applicationName: "מפת הטבות פייטר",
   robots: { index: true, follow: true },
+  // The whole distribution plan is one link passed between people, so the
+  // preview card is not decoration: a link with no card reads as spam.
+  openGraph: {
+    type: "website",
+    siteName: "מפת הטבות פייטר",
+    title: "מפת הטבות פייטר",
+    description: DESCRIPTION,
+    url: SITE,
+    locale: "he_IL",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "מפת הטבות פייטר",
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {
