@@ -52,7 +52,10 @@ export default function RootLayout({
 function SiteHeader() {
   return (
     <header className="hairline sticky top-0 z-40 bg-surface">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-3 py-2">
+      <div
+        className="mx-auto flex w-full max-w-6xl items-center gap-3 px-3"
+        style={{ height: "var(--header-h)" }}
+      >
         <Link
           href="/"
           className="tap flex items-center gap-2 font-extrabold tracking-tight"

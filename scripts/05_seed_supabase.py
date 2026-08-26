@@ -110,8 +110,8 @@ def upsert(url: str, key: str, rows: list, dry_run: bool) -> int:
             continue
         response = requests.post(endpoint, headers=headers, json=chunk, timeout=60)
         if response.status_code >= 300:
-            print("  batch at %d failed: %s %s"
-                  % (start, response.status_code, response.text[:400]), file=sys.stderr)
+            print("  batch at %d FAILED: %s %s"
+                  % (start, response.status_code, response.text[:300]), file=sys.stderr)
             continue
         written += len(chunk)
         print("  %d/%d" % (min(start + BATCH, len(rows)), len(rows)))
@@ -166,9 +166,21 @@ def main() -> None:
         pending += rejected
         published = [row for row in published if publishable(row)]
 
-    rows = [{k: row.get(k) for k in COLUMNS} for row in published + pending]
+    # A source_key must appear at most once per request. Postgres rejects the
+    # entire batch otherwise, and the first copy is the better one: published
+    # rows are ordered ahead of pending ones.
+    seen: dict = {}
+    for row in published + pending:
+        seen.setdefault(row["source_key"], row)
+    collapsed = list(seen.values())
+    dropped = len(published) + len(pending) - len(collapsed)
+    if dropped:
+        print("collapsed %d rows that shared a source_key" % dropped)
 
-    print("%d published, %d pending, %d total" % (len(published), len(pending), len(rows)))
+    rows = [{k: row.get(k) for k in COLUMNS} for row in collapsed]
+
+    print("%d published, %d pending, %d rows to send"
+          % (len(published), len(pending), len(rows)))
     if args.dry_run:
         print("\ndry run, nothing written. sample row:")
         print(json.dumps(rows[0], ensure_ascii=False, indent=2))

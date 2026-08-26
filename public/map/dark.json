@@ -22,12 +22,11 @@
       "source": "openmaptiles",
       "source-layer": "water",
       "filter": [
-        "all",
+        "==",
         [
-          "==",
-          "$type",
-          "Polygon"
-        ]
+          "geometry-type"
+        ],
+        "Polygon"
       ],
       "paint": {
         "fill-color": "#0b0e12"
@@ -38,14 +37,20 @@
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "transportation",
-      "minzoom": 8,
+      "minzoom": 7,
       "filter": [
-        "in",
-        "class",
-        "motorway",
-        "trunk",
-        "primary",
-        "secondary"
+        "match",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "motorway",
+          "trunk",
+          "primary"
+        ],
+        true,
+        false
       ],
       "layout": {
         "line-cap": "round",
@@ -61,10 +66,10 @@
           [
             "zoom"
           ],
-          8,
-          1.6,
+          7,
+          2.2,
           16,
-          9
+          10
         ]
       }
     },
@@ -73,17 +78,24 @@
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "transportation",
-      "minzoom": 8,
+      "minzoom": 7,
       "filter": [
-        "in",
-        "class",
-        "motorway",
-        "trunk",
-        "primary",
-        "secondary",
-        "tertiary",
-        "minor",
-        "service"
+        "match",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "motorway",
+          "trunk",
+          "primary",
+          "secondary",
+          "tertiary",
+          "minor",
+          "service"
+        ],
+        true,
+        false
       ],
       "layout": {
         "line-cap": "round",
@@ -99,8 +111,8 @@
           [
             "zoom"
           ],
-          8,
-          0.6,
+          7,
+          1.0,
           16,
           6
         ]
@@ -113,7 +125,10 @@
       "source-layer": "boundary",
       "filter": [
         "<=",
-        "admin_level",
+        [
+          "get",
+          "admin_level"
+        ],
         2
       ],
       "paint": {
@@ -131,11 +146,18 @@
       "source": "openmaptiles",
       "source-layer": "place",
       "filter": [
-        "in",
-        "class",
-        "city",
-        "town",
-        "village"
+        "match",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "city",
+          "town",
+          "village"
+        ],
+        true,
+        false
       ],
       "layout": {
         "text-field": [
@@ -150,7 +172,7 @@
           ]
         ],
         "text-font": [
-          "Noto Sans Bold"
+          "Noto Sans Regular"
         ],
         "text-size": [
           "interpolate",
@@ -161,33 +183,9 @@
             "zoom"
           ],
           5,
-          [
-            "case",
-            [
-              "==",
-              [
-                "get",
-                "class"
-              ],
-              "city"
-            ],
-            12,
-            10
-          ],
+          11,
           12,
-          [
-            "case",
-            [
-              "==",
-              [
-                "get",
-                "class"
-              ],
-              "city"
-            ],
-            18,
-            14
-          ]
+          16
         ],
         "text-max-width": 8,
         "text-padding": 4

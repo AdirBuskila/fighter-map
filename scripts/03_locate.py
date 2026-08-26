@@ -86,7 +86,14 @@ MIN_CORE = 80.0
 CITY_RADIUS_KM = 25.0
 CANDIDATES = 12
 
-LOCATE_REASONS = {"no_osm_match", "low_match_confidence", "not_located"}
+# Every reason a locating pass can write, including ones written by providers
+# this project has since dropped. Anything listed here is cleared and rewritten
+# on each run; anything else (Phase 2's own low_confidence) is left alone.
+# Missing the retired names is how 610 stale rows survived a provider swap.
+LOCATE_REASONS = {
+    "no_osm_match", "low_match_confidence", "not_located",
+    "not_geocoded", "no_google_result",
+}
 
 
 def haversine_km(a_lat, a_lon, b_lat, b_lon) -> float:

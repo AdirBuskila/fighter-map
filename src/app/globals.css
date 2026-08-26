@@ -71,6 +71,7 @@
 
   --focus: #1b4fd8;
   --radius: 4px;
+  --header-h: 3.5rem;
 }
 
 @media (prefers-color-scheme: dark) {

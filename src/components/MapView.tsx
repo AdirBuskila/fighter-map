@@ -2,6 +2,7 @@
 
 import {
   AttributionControl,
+  setRTLTextPlugin,
   Map as MlMap,
   Marker,
   NavigationControl,
@@ -27,6 +28,26 @@ type Props = {
   selectionFrom: "map" | "list" | null;
   onSelect: (id: string, from: "map" | "list") => void;
 };
+
+/**
+ * MapLibre does not reorder bidirectional text on its own, so without this
+ * every Hebrew label on the map renders backwards: נצרת came out as תרצנ and
+ * רמלה as הלמר. The plugin is self-hosted rather than pulled from a CDN, so
+ * the map has no third-party runtime dependency beyond its tiles.
+ *
+ * Loaded lazily (false), so it never blocks first paint, and guarded because
+ * calling it twice throws.
+ */
+let rtlRequested = false;
+function ensureRtlText(): void {
+  if (rtlRequested) return;
+  rtlRequested = true;
+  try {
+    setRTLTextPlugin("/rtl-text.js", true);
+  } catch (cause) {
+    console.error("[maplibre] RTL text plugin failed", cause);
+  }
+}
 
 const SRC = "places";
 const SRC_BRANCH = "branches";
@@ -59,6 +80,8 @@ export default function MapView({
   useEffect(() => {
     if (!host.current || map.current) return;
 
+    ensureRtlText();
+
     const dark = window.matchMedia("(prefers-color-scheme: dark)");
     const styleFor = (isDark: boolean) => `/map/${isDark ? "dark" : "light"}.json`;
 
@@ -68,9 +91,12 @@ export default function MapView({
       center: [ISRAEL_CENTER.lng, ISRAEL_CENTER.lat],
       zoom: ISRAEL_DEFAULT_ZOOM,
       attributionControl: false,
-      // Israel plus a margin. Nothing in this dataset is outside it, and the
-      // reader never wants to end up looking at the Atlantic.
-      maxBounds: [[33.0, 28.5], [37.2, 34.3]],
+      // No maxBounds. Israel is about 4 degrees wide, which is narrower than
+      // the viewport covers at the country-wide zoom, so the constraint could
+      // never be satisfied and the camera never settled: MapLibre resolved the
+      // tile source and then requested not one tile. minZoom keeps the reader
+      // from drifting off to the Atlantic instead.
+      minZoom: 6.5,
     });
     map.current = instance;
 
@@ -82,6 +108,15 @@ export default function MapView({
       }),
       "bottom-left",
     );
+
+    // Development only: lets tools/probe_map.js interrogate the live map.
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __map?: MlMap }).__map = instance;
+    }
+
+    instance.on("error", (event) => {
+      console.error("[maplibre]", (event as unknown as { error?: Error }).error?.message ?? event);
+    });
 
     instance.on("load", () => {
       installLayers(instance);

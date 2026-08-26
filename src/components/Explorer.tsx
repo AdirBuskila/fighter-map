@@ -113,7 +113,12 @@ export default function Explorer({ mapped, unmapped }: Props) {
 
   const body = (
     <div className="flex flex-1 flex-col lg:flex-row-reverse">
-      <div className="h-[60vh] shrink-0 lg:h-auto lg:w-[58%] lg:flex-1">
+      {/* The map pane must never be sized by its sibling. As a plain flex
+          child it grew to the height of all 417 list rows, 60,000px, WebGL
+          clamped the canvas to 4096 and exactly one tile ever loaded. It gets
+          its own height at both breakpoints, and sticks on desktop so it stays
+          in view while the list scrolls the page. */}
+      <div className="h-[60vh] shrink-0 self-start lg:sticky lg:h-[calc(100dvh-var(--header-h))] lg:top-[var(--header-h)] lg:w-[58%] lg:flex-1">
         <MapView
           places={visibleMapped}
           branches={branches}
@@ -124,8 +129,8 @@ export default function Explorer({ mapped, unmapped }: Props) {
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:w-[42%] lg:max-w-[520px] lg:flex-none lg:overflow-y-auto">
-        <div className="sticky top-0 z-20">
+      <div className="flex min-h-0 flex-1 flex-col lg:w-[42%] lg:max-w-[520px] lg:flex-none">
+        <div className="sticky top-0 z-20 lg:top-[var(--header-h)]">
           <FilterBar
             filters={filters}
             counts={counts}
