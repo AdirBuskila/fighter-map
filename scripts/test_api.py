@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import uuid
 
@@ -201,7 +202,49 @@ def main() -> int:
     short = requests.get(f"{BASE}/api/search", params={"q": "a"}, timeout=30)
     check("a one letter query is not sent upstream", short.json().get("results"), [])
 
-    print("\nE. moderation")
+    print(chr(10) + "F. pinning a place the geocoders could not find")
+    # A few hundred imported places have no coordinates because OSM simply
+    # does not know them. The queue lets a moderator search and pin one,
+    # which is their only path onto the map.
+    svc = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    base = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "")
+    if svc and base:
+        made = requests.post(
+            base + "/rest/v1/places",
+            headers={"apikey": svc, "Authorization": "Bearer " + svc,
+                     "Content-Type": "application/json",
+                     "Prefer": "return=representation"},
+            json=[{"source_key": "unlocated:test-" + run,
+                   "name_he": "מקום בלי נקודה",
+                   "category": "other", "source": "pdf_import", "status": "pending",
+                   "review_reason": "no_osm_match", "benefit_fighter_card": True}],
+            timeout=30).json()
+        check("a place with no pin can sit in the queue", len(made), 1)
+        pinless = made[0]["id"]
+
+        status, _ = post("/api/admin", {"action": "locate", "placeId": pinless,
+                                        "password": args.admin_password}, ip("mod"))
+        check("locate with nothing chosen is refused", status, 400)
+
+        status, _ = post("/api/admin", {
+            "action": "locate", "placeId": pinless, "password": args.admin_password,
+            "location": {"providerRef": "osm:node/8" + run[:8], "lat": 32.0853,
+                         "lng": 34.7818,
+                         "addressHe": "דיזנגוף 1",
+                         "city": "תל אביב"}}, ip("mod"))
+        check("a moderator pins it", status, 200)
+
+        detail = requests.get(f"{BASE}/place/{pinless}", timeout=30)
+        check("and it becomes published and readable", detail.status_code, 200)
+        near = requests.get(f"{BASE}/api/places/near",
+                            params={"lat": 32.0853, "lng": 34.7818, "radius": 2000},
+                            timeout=30).json()
+        check("and it answers what is near me",
+              any(p["id"] == pinless for p in near.get("places", [])), True)
+    else:
+        print("  skipped, no service role key in the environment")
+
+    print("\nF. moderation")
     status, body = post("/api/admin", {"action": "list", "password": "wrong"}, ip("mod"))
     check("a wrong password is refused", status, 401)
 

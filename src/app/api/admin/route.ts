@@ -75,6 +75,19 @@ export async function POST(request: Request) {
     update = { status: "published", review_reason: null };
   } else if (input.action === "reject") {
     update = { status: "rejected" };
+  } else if (input.action === "locate") {
+    // Give the place a pin and publish it in one step. This is how the few
+    // hundred rows no geocoder could find actually reach the map: the
+    // moderator searches, the provider supplies the identity.
+    const spot = input.location!;
+    update = {
+      provider_ref: spot.providerRef,
+      location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
+      address_he: spot.addressHe ?? null,
+      city: spot.city ?? null,
+      status: "published",
+      review_reason: null,
+    };
   } else if (input.action === "restore") {
     // Retire the failure reports that caused the flip. Without this the next
     // single report recounts them and puts the place straight back.
@@ -111,6 +124,9 @@ export async function POST(request: Request) {
     console.error("admin update failed", error.message);
     // A published place with no pin trips a check constraint. Say so plainly
     // instead of returning a generic failure.
+    if (error.message.includes("places_provider_ref_key")) {
+      return jsonError("המקום הזה כבר קיים במפה תחת שם אחר", 409);
+    }
     if (error.message.includes("places_published_needs_pin")) {
       return jsonError(
         "אי אפשר לפרסם מקום בלי נקודת ציון. מצאו אותו מחדש דרך הוספת מקום",

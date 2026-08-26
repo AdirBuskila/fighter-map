@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import PlacePicker, { type PickedPlace } from "./PlacePicker";
 import { CATEGORY_LABELS, CATEGORY_ORDER, type Category } from "@/lib/types";
 
 type QueueRow = {
@@ -71,14 +72,14 @@ export default function AdminPanel() {
 
   async function act(
     placeId: string,
-    action: "approve" | "reject" | "restore" | "edit",
-    patch?: Record<string, unknown>,
+    action: "approve" | "reject" | "restore" | "edit" | "locate",
+    extra?: Record<string, unknown>,
   ) {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      await call({ action, placeId, patch });
+      await call({ action, placeId, ...extra });
       setMessage(
         action === "approve"
           ? "המקום פורסם"
@@ -86,7 +87,9 @@ export default function AdminPanel() {
             ? "המקום נדחה"
             : action === "restore"
               ? "המקום הוחזר למפה"
-              : "השינוי נשמר",
+              : action === "locate"
+                ? "המקום סומן על המפה ופורסם"
+                : "השינוי נשמר",
       );
       await load();
     } catch (cause) {
@@ -193,8 +196,8 @@ function Section({
   actions: Array<"approve" | "reject" | "restore" | "edit">;
   onAct: (
     id: string,
-    action: "approve" | "reject" | "restore" | "edit",
-    patch?: Record<string, unknown>,
+    action: "approve" | "reject" | "restore" | "edit" | "locate",
+    extra?: Record<string, unknown>,
   ) => void;
 }) {
   return (
@@ -238,8 +241,8 @@ function QueueItem({
   actions: Array<"approve" | "reject" | "restore" | "edit">;
   onAct: (
     id: string,
-    action: "approve" | "reject" | "restore" | "edit",
-    patch?: Record<string, unknown>,
+    action: "approve" | "reject" | "restore" | "edit" | "locate",
+    extra?: Record<string, unknown>,
   ) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -272,6 +275,31 @@ function QueueItem({
         <p className="mt-1 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
           {row.note_he}
         </p>
+      )}
+
+      {!row.provider_ref && !row.is_chain && !row.is_online && (
+        <div className="mt-3 border-r-4 border-fighter bg-fighter-tint p-3">
+          <p className="mb-2 font-bold" style={{ fontSize: "var(--text-sm)" }}>
+            אין למקום הזה נקודה על המפה. חפשו אותו כדי לפרסם אותו.
+          </p>
+          <PlacePicker
+            compact
+            initialQuery={[row.name_he, row.city].filter(Boolean).join(" ")}
+            placeholder="חפשו את העסק"
+            onPick={(picked: PickedPlace) =>
+              onAct(row.id, "locate", {
+                location: {
+                  providerRef: picked.providerRef,
+                  lat: picked.lat,
+                  lng: picked.lng,
+                  addressHe: picked.addressHe,
+                  city: picked.city ?? row.city,
+                },
+              })
+            }
+            onClear={() => undefined}
+          />
+        </div>
       )}
 
       {editing && (
@@ -337,9 +365,7 @@ function QueueItem({
                 disabled={busy}
                 onClick={() =>
                   onAct(row.id, "edit", {
-                    nameHe: name,
-                    city: city || null,
-                    category,
+                    patch: { nameHe: name, city: city || null, category },
                   })
                 }
               >

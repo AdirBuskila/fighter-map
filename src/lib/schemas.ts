@@ -43,7 +43,7 @@ export type SubmissionInput = z.infer<typeof submissionInput>;
  *  are no user accounts in this app and one operator does not need a session. */
 export const adminActionInput = z.object({
   password: z.string().min(1),
-  action: z.enum(["list", "approve", "reject", "restore", "edit"]),
+  action: z.enum(["list", "approve", "reject", "restore", "edit", "locate"]),
   placeId: uuid.optional(),
   patch: z
     .object({
@@ -55,9 +55,23 @@ export const adminActionInput = z.object({
       benefitVacationVoucher: z.boolean().optional(),
     })
     .optional(),
+  // Pinning a place the geocoders could not find. The moderator searches and
+  // picks, so identity still comes from the provider and never from typing.
+  location: z
+    .object({
+      providerRef: z.string().min(1),
+      lat: z.number().gte(-90).lte(90),
+      lng: z.number().gte(-180).lte(180),
+      addressHe: z.string().trim().max(300).nullable().optional(),
+      city: z.string().trim().max(80).nullable().optional(),
+    })
+    .optional(),
 }).refine((v) => v.action === "list" || Boolean(v.placeId), {
   message: "חסר מזהה מקום",
   path: ["placeId"],
+}).refine((v) => v.action !== "locate" || Boolean(v.location), {
+  message: "צריך לבחור מקום מהחיפוש",
+  path: ["location"],
 });
 export type AdminActionInput = z.infer<typeof adminActionInput>;
 

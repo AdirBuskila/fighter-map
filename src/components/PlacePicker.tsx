@@ -39,12 +39,19 @@ type Result = {
 export default function PlacePicker({
   onPick,
   onClear,
+  compact = false,
+  initialQuery = "",
+  placeholder = "שם העסק, למשל לחם בשר",
 }: {
   onPick: (place: PickedPlace) => void;
   onClear: () => void;
+  /** Inline variant for the moderation queue: no label, no helper text. */
+  compact?: boolean;
+  initialQuery?: string;
+  placeholder?: string;
 }) {
   const listId = useId();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Result[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -147,15 +154,17 @@ export default function PlacePicker({
 
   return (
     <div ref={box} className="relative">
-      <label
-        htmlFor="place-search"
-        className="mb-1 block font-bold"
-        style={{ fontSize: "var(--text-base)" }}
-      >
-        איזה מקום?
-      </label>
+      {!compact && (
+        <label
+          htmlFor={`${listId}-input`}
+          className="mb-1 block font-bold"
+          style={{ fontSize: "var(--text-base)" }}
+        >
+          איזה מקום?
+        </label>
+      )}
       <input
-        id="place-search"
+        id={`${listId}-input`}
         className="field"
         type="text"
         autoComplete="off"
@@ -164,7 +173,7 @@ export default function PlacePicker({
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-        placeholder="שם העסק, למשל לחם בשר"
+        placeholder={placeholder}
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -176,9 +185,17 @@ export default function PlacePicker({
         onFocus={() => results.length > 0 && setOpen(true)}
       />
 
-      <p className="mt-1 text-ink-faint" style={{ fontSize: "var(--text-xs)" }}>
-        {busy ? "מחפש" : "הקלידו ובחרו מהרשימה. הבחירה ממלאת כתובת וקטגוריה לבד."}
-      </p>
+      {!compact ? (
+        <p className="mt-1 text-ink-faint" style={{ fontSize: "var(--text-xs)" }}>
+          {busy ? "מחפש" : "הקלידו ובחרו מהרשימה. הבחירה ממלאת כתובת וקטגוריה לבד."}
+        </p>
+      ) : (
+        busy && (
+          <p className="mt-1 text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
+            מחפש
+          </p>
+        )
+      )}
 
       {open && (
         <ul
