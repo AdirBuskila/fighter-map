@@ -83,6 +83,9 @@ py -3.13 -m venv .venv
 # Phase 3b - match places against it, entirely offline
 ./.venv/Scripts/python.exe scripts/03_locate.py --verbose
 
+# Phase 3c - ask Nominatim and Photon about the leftovers (cached, ~9 min)
+./.venv/Scripts/python.exe scripts/03b_locate_remote.py
+
 # Load it
 export NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
 ./.venv/Scripts/python.exe scripts/05_seed_supabase.py --dry-run
@@ -107,6 +110,7 @@ a fix you make survives every future rerun.
 
 ```bash
 npm run check                                          # types and lint
+npm run smoke                                          # real browser, 16 checks
 ./.venv/Scripts/python.exe scripts/check_palette.py    # colour blindness, contrast
 ./.venv/Scripts/python.exe scripts/check_migration.py  # SQL grammar, column contracts
 ./.venv/Scripts/python.exe scripts/test_db.py          # trust rules, needs Docker
@@ -130,6 +134,13 @@ npm run dev
 ./.venv/Scripts/python.exe scripts/test_api.py    # 24 assertions
 npx supabase stop         # when you are done
 ```
+
+`npm run smoke` drives a real browser. It exists because the two worst bugs
+this project has had were both invisible to every other suite: a map pane that
+grew to 60,719px so exactly one tile loaded, and a MapLibre version whose
+worker Next could not bundle, which requested no tiles and raised no error.
+Both render a blank map with a clean console. Pass `mobile` as a third argument
+to check a phone, which is how a pane that was zero pixels wide turned up.
 
 `test_api.py` drives the real route handlers, acting as several different
 reporters via `X-Forwarded-For`, which is what the rate limiter hashes. It
@@ -163,10 +174,11 @@ data/raw_rows.json                     759 rows
   v
 data/normalized.json                   857 places
 data/needs_review.json                 low confidence, for /admin
-  |  03a_osm_extract.py  30,270 named businesses in Israel, from OSM
-  |  03_locate.py        matched locally, the OSM ref becomes the key
+  |  03a_osm_extract.py    30,270 named businesses in Israel, from OSM
+  |  03_locate.py          matched locally, the OSM ref becomes the key
+  |  03b_locate_remote.py  Nominatim then Photon for the leftovers
   v
-data/places.json                       181 located, 429 to review
+data/places.json                       209 located, 396 to review
   |  05_seed_supabase.py
   v
 Supabase -> the app
@@ -186,6 +198,12 @@ private individuals' mobile numbers verbatim, and the OSM extract is 119 MB.
 | Confirmed in the last 30 days badges "אומת החודש" | `isFresh()` in `src/lib/format.ts` |
 | Never confirmed here states its age in plain text, no badge | `isUnverified()` + `LastSignalLine` |
 | 5 reports per reporter per hour | `rateLimited()` in the route handlers |
+
+Coverage is the honest weak spot of going key-free. OSM knows 209 of the 610
+imported single locations; Google would have found most of the rest. The other
+396 are not lost: `/admin` lets a moderator search and pin one in a few
+seconds, and a pinned place merges correctly with any later user submission for
+the same shop because identity still comes from the provider.
 
 A place is never un-flipped automatically. `/admin` lists the ones that were
 flagged and then kept collecting confirmations, which is the signal a business
