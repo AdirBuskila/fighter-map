@@ -41,7 +41,7 @@ export default function PlacePicker({
   onClear,
   compact = false,
   initialQuery = "",
-  placeholder = "שם העסק, למשל לחם בשר",
+  placeholder = "חיפוש בית העסק במפת העולם",
 }: {
   onPick: (place: PickedPlace) => void;
   onClear: () => void;
@@ -160,7 +160,7 @@ export default function PlacePicker({
           className="mb-1 block font-bold"
           style={{ fontSize: "var(--text-base)" }}
         >
-          איזה מקום?
+          איזה בית עסק?
         </label>
       )}
       <input
@@ -185,9 +185,15 @@ export default function PlacePicker({
         onFocus={() => results.length > 0 && setOpen(true)}
       />
 
+      {/* The first person to try the app read this box as a search over the
+          places already here, and could not see why adding a place would start
+          by searching for it. It searches every business on the world map, not
+          this site, and the pick is what fixes the location. Say both. */}
       {!compact ? (
         <p className="mt-1 text-ink-faint" style={{ fontSize: "var(--text-xs)" }}>
-          {busy ? "מחפש" : "הקלידו ובחרו מהרשימה. הבחירה ממלאת כתובת וקטגוריה לבד."}
+          {busy
+            ? "מחפש"
+            : "החיפוש עובר על כל בתי העסק במפה, לא רק על אלה שכבר באתר. הבחירה מהרשימה קובעת את המיקום המדויק וממלאת כתובת וקטגוריה לבד."}
         </p>
       ) : (
         busy && (

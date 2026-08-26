@@ -1,5 +1,11 @@
 import type { Place } from "@/lib/types";
-import { formatDate, isFresh, isStale, lastSignal } from "@/lib/format";
+import {
+  formatDate,
+  isFresh,
+  isSingleSource,
+  isStale,
+  lastSignal,
+} from "@/lib/format";
 
 /**
  * Benefit chips. Shape carries the meaning as well as colour: a circle for the
@@ -38,6 +44,18 @@ export function StatusBadges({ place }: { place: Place }) {
   }
   if (place.status === "pending") {
     return <span className="chip">ממתין לאישור</span>;
+  }
+  // Before the freshness badges, deliberately. A place added an hour ago is
+  // freshly confirmed by the clock, so isFresh would stamp "אומת החודש" on a
+  // row that exactly one person has ever vouched for. That reads as the
+  // strongest signal the map has, on its weakest row.
+  if (isSingleSource(place)) {
+    return (
+      <span className="chip chip-single">
+        <span aria-hidden="true" className="mark mark-single" />
+        דיווח אחד
+      </span>
+    );
   }
   if (isStale(place)) {
     return <span className="chip chip-stale">לא מאומת לאחרונה</span>;

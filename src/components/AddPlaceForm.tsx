@@ -22,7 +22,12 @@ function Form() {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<"pending" | "confirmed_existing" | null>(null);
+  // The new place's id travels with the outcome, because the whole point of
+  // publishing on arrival is that the contributor gets to go and look at it.
+  const [done, setDone] = useState<{
+    outcome: "published" | "confirmed_existing";
+    placeId: string | null;
+  } | null>(null);
 
   const handlePick = useCallback((place: PickedPlace) => {
     setPicked(place);
@@ -63,17 +68,18 @@ function Form() {
       });
       const body = (await res.json()) as {
         error?: string;
-        outcome?: "pending" | "confirmed_existing";
+        outcome?: "published" | "confirmed_existing";
         placeId?: string;
       };
       if (!res.ok) {
         setError(body.error ?? "השליחה נכשלה. נסו שוב בעוד רגע");
         return;
       }
-      setDone(body.outcome ?? "pending");
-      if (body.outcome === "confirmed_existing" && body.placeId) {
-        router.prefetch(`/place/${body.placeId}`);
-      }
+      const placeId = body.placeId ?? null;
+      setDone({ outcome: body.outcome ?? "published", placeId });
+      // Either branch ends on that place's page, so warm it while the reader
+      // is still looking at the confirmation.
+      if (placeId) router.prefetch(`/place/${placeId}`);
     } catch {
       setError("אין חיבור לרשת. בדקו את החיבור ונסו שוב");
     } finally {
@@ -82,25 +88,26 @@ function Form() {
   }
 
   if (done) {
+    const added = done.outcome !== "confirmed_existing";
     return (
       <div role="status">
         <h2 className="font-extrabold" style={{ fontSize: "var(--text-xl)" }}>
-          {done === "confirmed_existing"
-            ? "המקום כבר במפה, והדיווח שלכם נוסף לו"
-            : "תודה, המקום נשלח"}
+          {added ? "המקום נוסף למפה" : "המקום כבר במפה, והדיווח שלכם נוסף לו"}
         </h2>
         <p className="mt-2 text-ink-soft" style={{ fontSize: "var(--text-base)" }}>
-          {done === "confirmed_existing"
-            ? "עדכנו את סוגי ההטבה לפי מה שסימנתם."
-            : "המקום יופיע במפה אחרי שעוד אדם אחד יאשר שההטבה עבדה שם."}
+          {added
+            ? "הוא מסומן כרגע כדיווח אחד. ברגע שעוד מישהו יאשר שההטבה עבדה שם, הסימון יתמלא."
+            : "עדכנו את סוגי ההטבה לפי מה שסימנתם."}
         </p>
         <div className="mt-6 flex gap-2">
+          {/* Straight to the pin. Somebody who just added a place and cannot
+              find it assumes nothing happened, and does not add a second. */}
           <button
             type="button"
             className="btn btn-primary px-4"
-            onClick={() => router.push("/")}
+            onClick={() => router.push(done.placeId ? `/place/${done.placeId}` : "/")}
           >
-            חזרה למפה
+            {added ? "הצגת המקום" : "מעבר למקום"}
           </button>
           <button
             type="button"

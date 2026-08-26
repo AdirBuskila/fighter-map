@@ -6,6 +6,16 @@ export type PlaceStatus =
   | "rejected"
   | "reported_not_working";
 
+/**
+ * Where a row came from.
+ *
+ * This rides along with every place because the trust rules read differently
+ * depending on it: a `user_submission` with one vouch is one person's word and
+ * can be pulled by one report, while a `pdf_import` with none came from a
+ * spreadsheet many reservists wrote into and still takes three.
+ */
+export type PlaceSource = "pdf_import" | "user_submission";
+
 export type Category =
   | "restaurant"
   | "cafe"
@@ -41,6 +51,7 @@ export type Place = {
   benefit_fighter_card: boolean;
   benefit_vacation_voucher: boolean;
   note_he: string | null;
+  source: PlaceSource;
   status: PlaceStatus;
   confirm_count: number;
   report_count: number;

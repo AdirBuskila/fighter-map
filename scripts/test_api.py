@@ -108,11 +108,16 @@ def main() -> int:
     print("A. somebody adds a place")
     status, body = post("/api/submissions", submission(ref, "בורגר בדיקה"), ip("alice"))
     check("a new place is accepted", status, 200)
-    check("and waits for a second opinion", body.get("outcome"), "pending")
+    check("and it is on the map at once", body.get("outcome"), "published")
     place_id = body.get("placeId")
     if not place_id:
         print("\nno placeId came back, cannot continue")
         return 1
+
+    detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
+    check("the place is readable immediately", detail.status_code, 200)
+    check("and says plainly that one person reported it",
+          "דיווח אחד" in detail.text, True)
 
     status, body = post("/api/submissions",
                         submission(ref, "בורגר בדיקה", benefitVacationVoucher=True),
@@ -121,13 +126,14 @@ def main() -> int:
           body.get("outcome"), "confirmed_existing")
 
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
-    check("a pending place is not readable yet", detail.status_code, 404)
+    check("so it is still standing on one report", "דיווח אחד" in detail.text, True)
 
     status, body = post("/api/submissions", submission(ref, "בורגר בדיקה"), ip("bob"))
     check("a second person confirms it", body.get("outcome"), "confirmed_existing")
 
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
-    check("two independent people publish it", detail.status_code, 200)
+    check("two independent people fill the mark in",
+          "דיווח אחד" in detail.text, False)
     check("and the page carries the name", "בורגר בדיקה" in detail.text, True)
     check("the voucher benefit the first person added survived",
           "שובר חופשה" in detail.text, True)
@@ -156,7 +162,23 @@ def main() -> int:
     check("a flipped place stays on the map",
           any(p["id"] == place_id for p in near.get("places", [])), True)
 
-    print("\nC. what the endpoints refuse")
+    print("\nC. one report is enough when one person is all there is")
+    # The counterweight to publishing on arrival. Section B just showed that a
+    # corroborated place takes three independent reporters to pull. A place
+    # nobody has backed up must not: if adding costs one person and removing
+    # costs three, a map anybody can write to fills with noise it cannot shed.
+    solo_ref = "osm:node/7" + run[:8]
+    status, body = post("/api/submissions",
+                        submission(solo_ref, "פלאפל בדיקה"), ip("nina"))
+    check("a second place is added by one person", status, 200)
+    solo_id = body.get("placeId")
+
+    post("/api/reports", {"placeId": solo_id, "kind": "not_working"}, ip("omer"))
+    detail = requests.get(f"{BASE}/place/{solo_id}", timeout=30)
+    check("and one report takes it straight back off",
+          "דווח שלא עבד" in detail.text, True)
+
+    print("\nD. what the endpoints refuse")
     status, body = post("/api/reports", {"placeId": "not-a-uuid", "kind": "confirm"}, ip("bad"))
     check("a malformed id is rejected", status, 400)
     status, body = post("/api/reports",
@@ -171,7 +193,7 @@ def main() -> int:
                         ip("bad"))
     check("an over-long note", status, 400)
 
-    print("\nD. the rate limit")
+    print("\nE. the rate limit")
     # A reporter who has spent nothing yet, so the count starts at zero
     # however many times this script has run in the last hour.
     flooder = ip("flood")
@@ -184,7 +206,7 @@ def main() -> int:
             break
     check("five reports an hour, then a refusal", limited_at, 6)
 
-    print(chr(10) + "E. place search")
+    print(chr(10) + "F. place search")
     # The one piece with an external dependency, so worth asserting on rather
     # than assuming. Castro is a big chain and well mapped in OSM.
     found = requests.get(f"{BASE}/api/search",
@@ -202,7 +224,7 @@ def main() -> int:
     short = requests.get(f"{BASE}/api/search", params={"q": "a"}, timeout=30)
     check("a one letter query is not sent upstream", short.json().get("results"), [])
 
-    print(chr(10) + "F. pinning a place the geocoders could not find")
+    print(chr(10) + "G. pinning a place the geocoders could not find")
     # A few hundred imported places have no coordinates because OSM simply
     # does not know them. The queue lets a moderator search and pin one,
     # which is their only path onto the map.
@@ -244,7 +266,7 @@ def main() -> int:
     else:
         print("  skipped, no service role key in the environment")
 
-    print("\nF. moderation")
+    print("\nH. moderation")
     status, body = post("/api/admin", {"action": "list", "password": "wrong"}, ip("mod"))
     check("a wrong password is refused", status, 401)
 

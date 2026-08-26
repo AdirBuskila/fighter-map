@@ -12,6 +12,7 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
+import { isSingleSource } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
 import {
   ISRAEL_CENTER,
@@ -230,12 +231,22 @@ function token(name: string, fallback: string): string {
   return value || fallback;
 }
 
+type IconKind = "fighter" | "voucher" | "both" | "dead";
+
 /**
  * Shape, not just colour: circle for the fighter card, diamond for the
  * vacation voucher, a ringed circle for a place that takes both. Someone with
  * no colour vision at all still reads the map correctly.
+ *
+ * Fill carries a third fact. A solid mark is a place at least two independent
+ * people have vouched for; a hollow one is somebody's single report, published
+ * the moment they sent it. Hollow rather than a new colour on purpose: the two
+ * benefit colours are the map's whole vocabulary and were chosen together to
+ * survive red-green colour blindness, so a third would have to fight both.
+ * Filled against outlined survives any vision at all, and it reads as what it
+ * means, an entry not yet filled in.
  */
-function drawIcon(kind: "fighter" | "voucher" | "both" | "dead", selected: boolean): ImageData {
+function drawIcon(kind: IconKind, selected: boolean, single: boolean): ImageData {
   const size = 44;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -243,32 +254,53 @@ function drawIcon(kind: "fighter" | "voucher" | "both" | "dead", selected: boole
   const mid = size / 2;
   const r = selected ? 11 : 7;
 
-  const fill =
+  const ink =
     kind === "dead" ? token("--ink-faint", "#6d737b")
     : kind === "voucher" ? token("--voucher", "#a66100")
     : token("--fighter", "#1b4fd8");
+  const paper = token("--surface", "#ffffff");
+
+  const shape = () => {
+    ctx.beginPath();
+    if (kind === "voucher") {
+      ctx.moveTo(mid, mid - r);
+      ctx.lineTo(mid + r, mid);
+      ctx.lineTo(mid, mid + r);
+      ctx.lineTo(mid - r, mid);
+      ctx.closePath();
+    } else {
+      ctx.arc(mid, mid, r, 0, Math.PI * 2);
+    }
+  };
+
+  // A halo under everything, so a hollow mark still separates from a road or a
+  // coastline. A solid mark gets this from its own outline; a hollow one has
+  // no fill to hide behind.
+  if (single) {
+    ctx.beginPath();
+    ctx.arc(mid, mid, r + (kind === "both" ? 5.5 : 2.5), 0, Math.PI * 2);
+    ctx.fillStyle = paper;
+    ctx.fill();
+  }
 
   if (kind === "both") {
     ctx.beginPath();
     ctx.arc(mid, mid, r + 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = token("--voucher", "#a66100");
-    ctx.fill();
+    if (single) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = token("--voucher", "#a66100");
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = token("--voucher", "#a66100");
+      ctx.fill();
+    }
   }
 
-  ctx.beginPath();
-  if (kind === "voucher") {
-    ctx.moveTo(mid, mid - r);
-    ctx.lineTo(mid + r, mid);
-    ctx.lineTo(mid, mid + r);
-    ctx.lineTo(mid - r, mid);
-    ctx.closePath();
-  } else {
-    ctx.arc(mid, mid, r, 0, Math.PI * 2);
-  }
-  ctx.fillStyle = fill;
+  shape();
+  ctx.fillStyle = single ? paper : ink;
   ctx.fill();
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = selected ? token("--ink", "#0e1116") : "#ffffff";
+  ctx.lineWidth = single ? 3 : 2.5;
+  ctx.strokeStyle = single ? ink : selected ? token("--ink", "#0e1116") : "#ffffff";
   ctx.stroke();
 
   return ctx.getImageData(0, 0, size, size);
@@ -276,10 +308,15 @@ function drawIcon(kind: "fighter" | "voucher" | "both" | "dead", selected: boole
 
 function installLayers(map: MlMap): void {
   for (const kind of ["fighter", "voucher", "both", "dead"] as const) {
-    for (const selected of [false, true]) {
-      const name = selected ? `${kind}-on` : kind;
-      if (map.hasImage(name)) map.removeImage(name);
-      map.addImage(name, drawIcon(kind, selected), { pixelRatio: 2 });
+    // A place reported not working is grey whoever reported it, so it needs no
+    // hollow twin: "this stopped working" is already the whole story.
+    for (const single of kind === "dead" ? [false] : [false, true]) {
+      for (const selected of [false, true]) {
+        const base = single ? `${kind}-new` : kind;
+        const name = selected ? `${base}-on` : base;
+        if (map.hasImage(name)) map.removeImage(name);
+        map.addImage(name, drawIcon(kind, selected, single), { pixelRatio: 2 });
+      }
     }
   }
 
@@ -365,9 +402,13 @@ function installLayers(map: MlMap): void {
 
 function iconFor(place: Place): string {
   if (place.status === "reported_not_working") return "dead";
-  if (place.benefit_fighter_card && place.benefit_vacation_voucher) return "both";
-  if (place.benefit_vacation_voucher) return "voucher";
-  return "fighter";
+  const kind =
+    place.benefit_fighter_card && place.benefit_vacation_voucher ? "both"
+    : place.benefit_vacation_voucher ? "voucher"
+    : "fighter";
+  // The selected layer builds its own name with concat(icon, "-on"), so the
+  // suffix goes here and both variants stay in step by construction.
+  return isSingleSource(place) ? `${kind}-new` : kind;
 }
 
 function paint(map: MlMap, places: Place[], branches: EphemeralBranch[]): void {

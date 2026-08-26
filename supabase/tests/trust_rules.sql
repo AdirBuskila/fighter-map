@@ -44,10 +44,12 @@ $$;
 truncate reports, places cascade;
 
 -- ===========================================================================
-do $$ begin raise notice E'\nA. somebody adds a place'; end $$;
+do $$ begin raise notice E'\nA. the review queue releases a place at two vouches'; end $$;
 -- ===========================================================================
 
--- Exactly what /api/submissions inserts for a place nobody has reported yet.
+-- Since 0004 a submission arrives published (section G), so this path is now
+-- the review queue: an imported row with no pin, or one an admin has parked.
+-- The rule that frees it is unchanged, and still worth holding down.
 insert into places (
   id, provider_ref, source_key, name_he, category, is_chain, is_online,
   location, address_he, city, benefit_fighter_card, benefit_vacation_voucher,
@@ -63,7 +65,7 @@ insert into reports (place_id, kind, benefit_type, ip_hash)
 values ('11111111-1111-1111-1111-111111111111', 'new_submission', 'fighter_card', 'ip-alice');
 
 select assert_eq((select status from places where id = '11111111-1111-1111-1111-111111111111'),
-                 'pending', 'a new submission waits in pending');
+                 'pending', 'a parked place stays parked on one vouch');
 select assert_eq((select confirm_count from places where id = '11111111-1111-1111-1111-111111111111'),
                  1, 'the submitter counts as the first vouch');
 
@@ -243,5 +245,145 @@ select assert_eq((select count(*)::int from places_all() p
 select assert_eq((select count(*)::int from place_by_id(
                     (select id from places where source_key = 'k4'))),
                  0, 'and place_by_id refuses to serve it either');
+
+-- ===========================================================================
+do $$ begin raise notice E'\nG. a submission reaches the map at once'; end $$;
+-- ===========================================================================
+
+-- Exactly what /api/submissions inserts since 0004: published, not pending.
+insert into places (
+  id, provider_ref, source_key, name_he, category, is_chain, is_online,
+  location, address_he, city, benefit_fighter_card, benefit_vacation_voucher,
+  source, status, first_reported_at
+) values (
+  '33333333-3333-3333-3333-333333333333', 'osm:node/999003', 'osm:node/999003',
+  'פלאפל בדיקה', 'restaurant', false, false,
+  'SRID=4326;POINT(34.7700 32.0700)', 'אלנבי 5, תל אביב', 'תל אביב',
+  true, false, 'user_submission', 'published', now()
+);
+insert into reports (place_id, kind, benefit_type, ip_hash)
+values ('33333333-3333-3333-3333-333333333333', 'new_submission', 'fighter_card', 'ip-nina');
+
+select assert_eq((select status from places where id = '33333333-3333-3333-3333-333333333333'),
+                 'published', 'a submission is on the map immediately');
+select assert_eq((select confirm_count from places where id = '33333333-3333-3333-3333-333333333333'),
+                 1, 'standing on exactly one person');
+select assert_eq((select count(*)::int from places_all()
+                  where id = '33333333-3333-3333-3333-333333333333'),
+                 1, 'and the map query returns it');
+
+-- The client cannot tell "one submitter" from "one confirmer on an imported
+-- row" without this, and it has to draw them differently.
+select assert_eq((select source from places_all()
+                  where id = '33333333-3333-3333-3333-333333333333'),
+                 'user_submission', 'places_all carries source through');
+select assert_eq((select source from place_by_id('33333333-3333-3333-3333-333333333333')),
+                 'user_submission', 'and so does place_by_id');
+select assert_eq((select source from places_near(32.0700, 34.7700, 5000)
+                  where id = '33333333-3333-3333-3333-333333333333'),
+                 'user_submission', 'and so does places_near');
+
+-- Cleanup must never be dearer than noise: one person put this here, one
+-- person can take it away.
+insert into reports (place_id, kind, ip_hash)
+values ('33333333-3333-3333-3333-333333333333', 'not_working', 'ip-omer');
+select assert_eq((select report_count from places where id = '33333333-3333-3333-3333-333333333333'),
+                 1, 'one failure report is counted');
+select assert_eq((select status from places where id = '33333333-3333-3333-3333-333333333333'),
+                 'reported_not_working', 'and pulls a single source place at once');
+
+-- ===========================================================================
+do $$ begin raise notice E'\nH. a second vouch earns the three report rule'; end $$;
+-- ===========================================================================
+
+insert into places (
+  id, provider_ref, source_key, name_he, category, location, city,
+  benefit_fighter_card, source, status, first_reported_at
+) values (
+  '44444444-4444-4444-4444-444444444444', 'osm:node/999004', 'osm:node/999004',
+  'קפה בדיקה', 'cafe', 'SRID=4326;POINT(34.7750 32.0750)', 'תל אביב',
+  true, 'user_submission', 'published', now()
+);
+insert into reports (place_id, kind, ip_hash)
+values ('44444444-4444-4444-4444-444444444444', 'new_submission', 'ip-pini');
+insert into reports (place_id, kind, ip_hash)
+values ('44444444-4444-4444-4444-444444444444', 'confirm', 'ip-rina');
+
+select assert_eq((select confirm_count from places where id = '44444444-4444-4444-4444-444444444444'),
+                 2, 'two independent people vouch for it');
+
+insert into reports (place_id, kind, ip_hash)
+values ('44444444-4444-4444-4444-444444444444', 'not_working', 'ip-shai');
+select assert_eq((select status from places where id = '44444444-4444-4444-4444-444444444444'),
+                 'published', 'now one report is no longer enough');
+insert into reports (place_id, kind, ip_hash)
+values ('44444444-4444-4444-4444-444444444444', 'not_working', 'ip-tal');
+select assert_eq((select status from places where id = '44444444-4444-4444-4444-444444444444'),
+                 'published', 'nor two');
+insert into reports (place_id, kind, ip_hash)
+values ('44444444-4444-4444-4444-444444444444', 'not_working', 'ip-uri');
+select assert_eq((select status from places where id = '44444444-4444-4444-4444-444444444444'),
+                 'reported_not_working', 'three independent reporters still flip it');
+
+-- ===========================================================================
+do $$ begin raise notice E'\nI. the imported corpus is not single source'; end $$;
+-- ===========================================================================
+
+-- An imported row has confirm_count = 0 because nobody has pressed confirm on
+-- the site, not because one person invented it. Reading that count alone would
+-- make one report enough to empty the seed corpus, which is the whole map on
+-- day one. This is the assertion that catches it.
+insert into places (
+  id, source_key, name_he, category, location, city,
+  benefit_fighter_card, source, status, first_reported_at
+) values (
+  '55555555-5555-5555-5555-555555555555', 'k6', 'מסעדת ייבוא', 'restaurant',
+  'SRID=4326;POINT(34.7800 32.0800)', 'תל אביב',
+  true, 'pdf_import', 'published', now()
+);
+select assert_eq((select confirm_count from places where id = '55555555-5555-5555-5555-555555555555'),
+                 0, 'an imported place starts at zero vouches');
+
+insert into reports (place_id, kind, ip_hash)
+values ('55555555-5555-5555-5555-555555555555', 'not_working', 'ip-vered');
+select assert_eq((select status from places where id = '55555555-5555-5555-5555-555555555555'),
+                 'published', 'one report does not pull an imported place');
+insert into reports (place_id, kind, ip_hash)
+values ('55555555-5555-5555-5555-555555555555', 'not_working', 'ip-yossi');
+select assert_eq((select status from places where id = '55555555-5555-5555-5555-555555555555'),
+                 'published', 'two do not either');
+insert into reports (place_id, kind, ip_hash)
+values ('55555555-5555-5555-5555-555555555555', 'not_working', 'ip-zohar');
+select assert_eq((select status from places where id = '55555555-5555-5555-5555-555555555555'),
+                 'reported_not_working', 'three do, exactly as before');
+
+-- ===========================================================================
+do $$ begin raise notice E'\nJ. confirming a place must not weaken it'; end $$;
+-- ===========================================================================
+
+-- The trap in reading confirm_count without source: an imported place that one
+-- person confirmed lands on 1, the same figure a fresh submission carries. If
+-- the count alone decided, pressing confirm would move a place from needing
+-- three reports to needing one, so vouching for somewhere would make it easier
+-- to remove. That is backwards, and nobody would ever see it happen.
+insert into places (
+  id, source_key, name_he, category, location, city,
+  benefit_vacation_voucher, source, status, first_reported_at
+) values (
+  '66666666-6666-6666-6666-666666666666', 'k7', 'צימר ייבוא', 'zimmer',
+  'SRID=4326;POINT(35.5000 32.9000)', 'צפת',
+  true, 'pdf_import', 'published', now()
+);
+insert into reports (place_id, kind, ip_hash)
+values ('66666666-6666-6666-6666-666666666666', 'confirm', 'ip-alon');
+select assert_eq((select confirm_count from places where id = '66666666-6666-6666-6666-666666666666'),
+                 1, 'one confirmer puts an imported place on the same count as a submission');
+
+insert into reports (place_id, kind, ip_hash)
+values ('66666666-6666-6666-6666-666666666666', 'not_working', 'ip-bar');
+select assert_eq((select report_count from places where id = '66666666-6666-6666-6666-666666666666'),
+                 1, 'the report is counted');
+select assert_eq((select status from places where id = '66666666-6666-6666-6666-666666666666'),
+                 'published', 'but confirming it did not make it easier to remove');
 
 do $$ begin raise notice E'\nall trust rule tests passed'; end $$;

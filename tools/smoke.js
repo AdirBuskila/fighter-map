@@ -83,6 +83,12 @@ function check(label, actual, expected) {
       water: m.querySourceFeatures("openmaptiles", { sourceLayer: "water" }).length,
       places: m.querySourceFeatures("openmaptiles", { sourceLayer: "place" }).length,
       pins: m.queryRenderedFeatures({ layers: ["clusters", "pins"] }).length,
+      // A place published on one person's word draws hollow. The name is
+      // built by concatenation in two separate places (iconFor adds "-new",
+      // the selected layer adds "-on"), so a missing image is a silent miss:
+      // MapLibre drops the symbol and the pin simply is not there.
+      icons: ["fighter", "fighter-new", "fighter-new-on",
+              "voucher-new", "both-new", "dead"].filter((n) => m.hasImage(n)).length,
     };
   });
 
@@ -93,6 +99,7 @@ function check(label, actual, expected) {
     check("basemap has water geometry", live.water, (n) => n > 0);
     check("basemap has place labels", live.places, (n) => n > 0);
     check("our own pins are on screen", live.pins, (n) => n > 0);
+    check("every pin image is registered", live.icons, 6);
   } else {
     console.log("  note  window.__map is absent, so this is a production build");
   }
@@ -101,6 +108,48 @@ function check(label, actual, expected) {
   check("the list rendered rows", dom.rows, (n) => n > 10);
   check("the legal footer is present", dom.footer, true);
   check("the contact line is present", dom.contact, true);
+
+  // The masthead carried `sticky top-0 z-40` and still scrolled away, because
+  // an unlayered `.masthead { position: relative }` (added to anchor the
+  // keyline) outranked the utility. Nothing in the markup looked wrong, so
+  // assert on where the element actually is after a scroll.
+  const header = await page.evaluate(() => {
+    window.scrollTo(0, 1200);
+    const el = document.querySelector("header.masthead");
+    if (!el) return null;
+    return { top: Math.round(el.getBoundingClientRect().top),
+             scrolled: Math.round(window.scrollY) };
+  });
+  await page.waitForTimeout(300);
+  check("the page actually scrolled", header && header.scrolled, (n) => n > 200);
+  check("the masthead stayed pinned", header && header.top, 0);
+
+  // Both bars are sticky, and the filter bar used to stick at 0 because the
+  // masthead was not sticking at all. Assert they are stacked, not piled.
+  const bars = await page.evaluate(() => {
+    const head = document.querySelector("header.masthead");
+    const search = document.querySelector("#place-search");
+    if (!head || !search) return null;
+    const h = head.getBoundingClientRect();
+    const s = search.getBoundingClientRect();
+    return { clear: s.top >= h.bottom, onScreen: s.top >= 0 && s.bottom <= window.innerHeight };
+  });
+  check("the search box exists", Boolean(bars), true);
+  check("the filter bar clears the masthead", bars && bars.clear, true);
+  check("and stays reachable while scrolled", bars && bars.onScreen, true);
+
+  // Search narrows both the list and the map, so a broken filter shows up as
+  // a row count that does not move.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const rowsNow = () => page.evaluate(() => document.querySelectorAll("li").length);
+  await page.fill("#place-search", "תל אביב");
+  await page.waitForTimeout(400);
+  const narrowed = await rowsNow();
+  await page.fill("#place-search", "");
+  await page.waitForTimeout(400);
+  const restored = await rowsNow();
+  check("search narrows the list", narrowed, (n) => n > 0 && n < dom.rows);
+  check("and clearing it restores the list", restored, dom.rows);
   check("no console errors", errors.length, 0);
   errors.slice(0, 5).forEach((e) => console.log("      " + e));
 

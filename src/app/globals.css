@@ -284,7 +284,15 @@ label.tap {
    --------------------------------------------------------------------------- */
 
 .masthead {
-  position: relative;
+  /* Sticky, not relative.
+     The keyline below is positioned absolutely and needs a containing block,
+     and `position: relative` was the reflex that gave it one. But this rule is
+     unlayered, so it beat the `sticky` utility class on the element itself,
+     and the masthead scrolled away with the page while still carrying a class
+     that said it would not. A sticky box is a containing block too, so the
+     keyline is unaffected and the sign now behaves like one. */
+  position: sticky;
+  top: 0;
   background: var(--masthead);
   color: var(--on-masthead);
 }
@@ -416,6 +424,18 @@ label.tap {
   color: var(--ink-soft);
 }
 
+/* One person said so, nobody has backed them up yet.
+   Provisional, not wrong, so it must not borrow the warning colour: a place
+   somebody added ten minutes ago is the best information the map has about
+   that address. A dashed edge and a hollow mark say "outline, not filled in",
+   which is the same thing the hollow map pin says at a glance. */
+.chip-single {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
 /* A fighter mark is a circle, a voucher mark is a diamond. The shape carries
    the meaning on its own, so the colour is reinforcement rather than the
    only signal. */
@@ -432,6 +452,12 @@ label.tap {
 .mark-voucher {
   background: var(--voucher);
   transform: rotate(45deg);
+}
+/* Hollow, matching the hollow pin. Same grammar as the map, so a reader only
+   has to learn "outline means one report" once. */
+.mark-single {
+  border-radius: 50%;
+  border: 2px solid var(--ink-faint);
 }
 
 /* A road sign sets distances in a fixed column on the far side of the panel,
@@ -479,6 +505,43 @@ label.tap {
 }
 .field::placeholder {
   color: var(--ink-faint);
+}
+
+/* The search box. Same box as .field, but the magnifier and the clear button
+   sit inside the border rather than beside it, so the control reads as one
+   thing and the whole width stays tappable. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0 0.6rem;
+}
+.search-field:focus-within {
+  border-color: var(--focus);
+}
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+.search-field input::placeholder {
+  color: var(--ink-faint);
+}
+/* Safari draws its own clear button on type=search, which would sit next to
+   ours and cancel the reason the field has a border of its own. */
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.search-field button {
+  font-size: 1.35rem;
+  line-height: 1;
 }
 
 .btn {

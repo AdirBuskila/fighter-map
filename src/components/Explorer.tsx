@@ -11,6 +11,7 @@ const MapView = dynamic(() => import("./MapView"), {
   loading: () => <div className="h-full w-full bg-surface-sunk" />,
 });
 import { currentPosition, type LatLng } from "@/lib/geo";
+import { matchesQuery, queryWords } from "@/lib/search";
 import type { Category, EphemeralBranch, Place } from "@/lib/types";
 
 type Props = { mapped: Place[]; unmapped: Place[] };
@@ -19,6 +20,7 @@ const NEAR_RADIUS_M = 25000;
 
 export default function Explorer({ mapped, unmapped }: Props) {
   const [filters, setFilters] = useState<Filters>({
+    query: "",
     benefit: null,
     categories: new Set<Category>(),
     nearMe: false,
@@ -79,14 +81,18 @@ export default function Explorer({ mapped, unmapped }: Props) {
 
   const source = filters.nearMe && nearby ? nearby : mapped;
 
+  // Folded once per keystroke rather than once per row. At 450 rows the
+  // difference does not show, but the list is meant to grow.
+  const words = useMemo(() => queryWords(filters.query), [filters.query]);
+
   const matches = useCallback(
     (place: Place) => {
       if (filters.benefit === "fighter_card" && !place.benefit_fighter_card) return false;
       if (filters.benefit === "vacation_voucher" && !place.benefit_vacation_voucher) return false;
       if (filters.categories.size > 0 && !filters.categories.has(place.category)) return false;
-      return true;
+      return matchesQuery(place, words);
     },
-    [filters],
+    [filters, words],
   );
 
   const visibleMapped = useMemo(() => source.filter(matches), [source, matches]);
@@ -97,17 +103,21 @@ export default function Explorer({ mapped, unmapped }: Props) {
 
   // Counts come from the benefit-filtered set, not the fully filtered one, so
   // a chip always shows how many it would reveal rather than dropping to zero
-  // the moment another chip is picked.
+  // the moment another chip is picked. The search text is the exception: it
+  // narrows what the reader is looking at, so a chip promising 30 restaurants
+  // that the query has already excluded would simply be wrong.
   const counts = useMemo(() => {
     const pool = [...source, ...(filters.nearMe ? [] : unmapped)].filter((place) => {
-      if (filters.benefit === "fighter_card") return place.benefit_fighter_card;
-      if (filters.benefit === "vacation_voucher") return place.benefit_vacation_voucher;
-      return true;
+      if (filters.benefit === "fighter_card" && !place.benefit_fighter_card) return false;
+      if (filters.benefit === "vacation_voucher" && !place.benefit_vacation_voucher) {
+        return false;
+      }
+      return matchesQuery(place, words);
     });
     const out: Record<string, number> = {};
     for (const place of pool) out[place.category] = (out[place.category] ?? 0) + 1;
     return out;
-  }, [source, unmapped, filters.benefit, filters.nearMe]);
+  }, [source, unmapped, filters.benefit, filters.nearMe, words]);
 
   const total = visibleMapped.length + visibleUnmapped.length;
 
@@ -135,7 +145,11 @@ export default function Explorer({ mapped, unmapped }: Props) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:w-[42%] lg:max-w-[520px] lg:flex-none">
-        <div className="sticky top-0 z-20 lg:top-[var(--header-h)]">
+        {/* Sticks below the masthead at every width, not just lg. It used to
+            stick at 0 on mobile, which was correct only for as long as the
+            masthead was failing to stick at all: with that fixed, a top-0
+            filter bar parks itself underneath the sign. */}
+        <div className="sticky top-[var(--header-h)] z-20">
           <FilterBar
             filters={filters}
             counts={counts}
@@ -153,9 +167,11 @@ export default function Explorer({ mapped, unmapped }: Props) {
           onSelect={select}
           onBranches={showBranches}
           emptyMessage={
-            filters.nearMe
-              ? "אין מקומות ברדיוס 25 קילומטר. כבו את קרוב אליי כדי לראות את כל הארץ."
-              : "נסו לבטל חלק מהסינונים, או להוסיף מקום שאתם מכירים."
+            words.length > 0
+              ? `לא מצאנו מקום שמתאים ל"${filters.query.trim()}". נסו שם קצר יותר, או הוסיפו את המקום.`
+              : filters.nearMe
+                ? "אין מקומות ברדיוס 25 קילומטר. כבו את קרוב אליי כדי לראות את כל הארץ."
+                : "נסו לבטל חלק מהסינונים, או להוסיף מקום שאתם מכירים."
           }
         />
 

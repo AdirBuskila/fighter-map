@@ -58,6 +58,21 @@ export function isUnverified(place: Place): boolean {
 }
 
 /**
+ * One person put this here, and nobody has backed them up.
+ *
+ * Since a submission publishes on arrival, this is what keeps the map honest:
+ * the pin appears at once, but it is drawn hollow and badged until a second,
+ * independent person says the same thing. It is also the predicate the
+ * database uses to decide that one report is enough to pull the place, so the
+ * two have to agree, and the comment in 0004 explains why the source test
+ * cannot be dropped: an imported row somebody confirmed once also sits on a
+ * count of 1, and it is not the same fact at all.
+ */
+export function isSingleSource(place: Place): boolean {
+  return place.source === "user_submission" && place.confirm_count <= 1;
+}
+
+/**
  * Confirmed in the last month. This is the scarce signal on a crowd-sourced
  * map, so it is the one worth spending a badge on.
  */

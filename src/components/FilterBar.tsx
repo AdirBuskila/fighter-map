@@ -3,6 +3,7 @@
 import { CATEGORY_LABELS, CATEGORY_ORDER, type BenefitType, type Category } from "@/lib/types";
 
 export type Filters = {
+  query: string;
   benefit: BenefitType | null;
   categories: Set<Category>;
   nearMe: boolean;
@@ -40,6 +41,41 @@ export default function FilterBar({
 
   return (
     <div className="hairline bg-surface">
+      {/* Search comes first, above the filters.
+          Somebody arriving with a place in mind should not have to work out
+          which category it belongs to first, and the one person who tried the
+          app before launch went looking for a search box and found only the
+          one on /add, which searches the world rather than this map. */}
+      <div className="px-3 pt-2">
+        <div className="search-field">
+          <SearchMark />
+          <label htmlFor="place-search" className="sr-only">
+            חיפוש מקום, עיר או כתובת
+          </label>
+          <input
+            id="place-search"
+            type="search"
+            autoComplete="off"
+            value={filters.query}
+            onChange={(event) => onChange({ ...filters, query: event.target.value })}
+            placeholder="חיפוש לפי שם, עיר או כתובת"
+            style={{ fontSize: "var(--text-base)" }}
+          />
+          {filters.query !== "" && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...filters, query: "" })}
+              aria-label="ניקוי החיפוש"
+              className="tap shrink-0 px-1 text-ink-faint"
+            >
+              {/* A multiplication sign, not an x: it is symmetric, so it does
+                  not lean the wrong way in a right to left line. */}
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="flex items-stretch gap-2 px-3 pt-2">
         <div
           role="radiogroup"
@@ -124,6 +160,26 @@ export default function FilterBar({
       )}
 
     </div>
+  );
+}
+
+/** A magnifier, so the field reads as search before the placeholder is read. */
+function SearchMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="15"
+      height="15"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      className="shrink-0 text-ink-faint"
+    >
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M10.4 10.4 L14 14" />
+    </svg>
   );
 }
 

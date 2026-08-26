@@ -101,7 +101,16 @@ export async function POST(request: Request) {
       benefit_vacation_voucher: input.benefitVacationVoucher,
       note_he: input.note ?? null,
       source: "user_submission",
-      status: "pending",
+      // Published on arrival. The place is real (it came from the search
+      // provider, not a text box) and it is pinned, so the only thing waiting
+      // would buy is corroboration, which on a map this young never arrives:
+      // the contributor sees nothing appear and stops contributing.
+      //
+      // What replaces the wait is 0004. The row is drawn hollow and badged
+      // דיווח אחד until a second person vouches, and until then a single
+      // not_working report is enough to pull it. Cheap to add, equally cheap
+      // to remove.
+      status: "published",
       first_reported_at: new Date().toISOString(),
     })
     .select("id")
@@ -122,5 +131,6 @@ export async function POST(request: Request) {
   if (reportError) console.error("submission report failed", reportError.message);
 
   revalidatePath("/");
-  return Response.json({ ok: true, placeId: created.id, outcome: "pending" });
+  revalidatePath(`/place/${created.id}`);
+  return Response.json({ ok: true, placeId: created.id, outcome: "published" });
 }

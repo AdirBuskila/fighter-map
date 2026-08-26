@@ -26,6 +26,8 @@ async function localSeed(): Promise<Place[]> {
       ...(row as object),
       id: (row.provider_ref as string) ?? `local-${index}`,
       status: "published",
+      // data/places.json is the importer's output, so every row here is one.
+      source: "pdf_import",
       confirm_count: 0,
       report_count: 0,
       last_confirmed_at: null,
@@ -65,7 +67,7 @@ export async function fetchUnmappedPlaces(): Promise<Place[]> {
     .select(
       "id, provider_ref, name_he, name_en, category, is_chain, is_online," +
         " address_he, city, phone, url, benefit_fighter_card," +
-        " benefit_vacation_voucher, note_he, status, confirm_count," +
+        " benefit_vacation_voucher, note_he, source, status, confirm_count," +
         " report_count, first_reported_at, last_confirmed_at",
     )
     .in("status", ["published", "reported_not_working"])

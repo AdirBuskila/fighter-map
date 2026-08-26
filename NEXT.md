@@ -1,51 +1,58 @@
 # Where this is up to
 
-Everything below is committed and deployed. Three things are open.
+Everything below is committed and deployed.
 
-## 1. Blocker: run `supabase/migrations/0003_lock_reports.sql`
+## 1. Run `supabase/migrations/0004_publish_on_arrival.sql`
 
-Until this runs on the production database, **anyone can write to it**. The
-anon key ships in the JavaScript bundle, so a visitor can POST straight to
-PostgREST and skip the route handler, and with it both guards: Turnstile, and
-the rate limit (which counts by an `ip_hash` the caller supplies themselves).
+**The app expects it.** Until it runs, `/api/submissions` inserts
+`status: 'published'` into a schema whose read functions do not yet return
+`source`, so `isSingleSource` is undefined for every row: nothing gets the
+דיווח אחד badge or the hollow pin, and a single failure report cannot pull a
+one-person place. Paste it into the Supabase SQL editor.
 
-Demonstrated on a local copy: three requests with invented reporter ids flipped
-a published place to `reported_not_working`. Two more would publish any pending
-submission.
+It is safe to run on a live database. It replaces one trigger function and
+rebuilds the three read functions; it touches no rows.
 
-Nothing in the app changes when you run it. Every write already uses the
-service role key.
-
-To check whether it has been run, POST a deliberately invalid report as anon:
-`42501 permission denied` means closed, `23503 foreign key violation` means the
-insert was permitted and the hole is still open.
+`0003_lock_reports.sql` is already applied (probe returns `42501 permission
+denied`, which is what closed means). 0004 depends on it: the rate limit is
+what keeps publish-on-arrival honest, and that limit only counts anything when
+the `ip_hash` is computed by the server rather than sent by the caller.
 
 ## 2. Turnstile is not configured
 
 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are empty, so the
-bot check is silently skipped. The five-per-hour rate limit still applies once
-0003 is in. dash.cloudflare.com, five minutes, keys into Vercel.
+bot check is skipped. The five-per-hour rate limit still applies.
+dash.cloudflare.com, five minutes, keys into Vercel.
 
-## 3. Open question: should user submissions auto-publish?
+## How contribution works now
 
-Today a submitted place sits in `pending` until a second person adds the same
-one. The plan for this site is a WhatsApp message asking people to add places
-themselves, and an addition that does not appear reads as broken, which works
-against exactly that.
+Decided and built, replacing the old "wait for a second person" rule:
 
-Auto-publishing is a one-line change in `src/app/api/submissions/route.ts`
-(`status: "pending"` becomes `"published"`). The risk is low: a submitter
-cannot invent a location, they are rate limited, Turnstile gates bots, and
-`/admin` plus the "לא עבד לי" flow clean up anything bad.
+- a submission is **published the moment it is sent**, and the contributor is
+  taken straight to its page
+- it is drawn **hollow on the map** and badged **דיווח אחד** until a second,
+  independent person vouches for it
+- while it is on one person's word, **one failure report pulls it**. Two
+  vouches earn it the normal three-report protection
+- the imported corpus is explicitly outside that rule. Those rows sit at
+  `confirm_count = 0` because nobody has pressed confirm here, not because one
+  person invented them, so they still take three reports
 
-Not decided. Left as specified.
+`supabase/tests/trust_rules.sql` sections G to J hold all four of those down,
+including the one that bites: reading `confirm_count` without `source` would
+make *confirming* an imported place halve the reports needed to remove it.
 
 ## Also worth knowing
 
 - 209 of 610 imported places have coordinates. OSM does not know most small
   Israeli businesses. The other 396 sit in `/admin`, where a moderator can
-  search and pin one in a few seconds. Chipping at that queue is the single
-  best way to make the map denser.
-- `npm run smoke` drives a real browser, desktop and mobile. Two of the worst
-  bugs here were invisible to every other suite.
+  search and pin one in a few seconds. Chipping at that queue is still the
+  single best way to make the map denser.
+- `npm run smoke` drives a real browser, desktop and mobile, 24 checks. Three
+  of the worst bugs here were invisible to every other suite, the most recent
+  being a masthead that carried `sticky top-0` and scrolled away anyway,
+  because an unlayered `.masthead { position: relative }` outranked it.
+- Share **`https://fighter-map.vercel.app`**, never a link copied from a
+  Vercel deployment page. Deployment URLs are covered by Standard Protection
+  and demand a Vercel login; the production alias is public.
 - README has the full setup, pipeline and test story.

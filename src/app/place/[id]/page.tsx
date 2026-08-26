@@ -8,6 +8,7 @@ import {
   externalUrl,
   formatDate,
   googleMapsUrl,
+  isSingleSource,
   lastSignal,
   telHref,
   wazeUrl,
@@ -81,6 +82,19 @@ export default async function PlacePage({ params }: Params) {
         >
           משתמשים דיווחו שההטבה הפסיקה לעבוד כאן. שווה לוודא בבית העסק לפני
           שנוסעים.
+        </p>
+      )}
+
+      {/* The badge says דיווח אחד in two words; this says what to do about it.
+          A single report is real information, just thin, and the fastest way
+          to thicken it is the person reading this page right now. */}
+      {isSingleSource(place) && place.status === "published" && (
+        <p
+          className="mt-4 border-r-4 border-line-strong px-3 py-2 text-ink-soft"
+          style={{ fontSize: "var(--text-sm)" }}
+        >
+          אדם אחד דיווח שההטבה עבדה כאן, ואף אחד עוד לא אישר את זה. אם הייתם כאן,
+          הדיווח שלכם יקבע.
         </p>
       )}
 

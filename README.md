@@ -110,7 +110,7 @@ a fix you make survives every future rerun.
 
 ```bash
 npm run check                                          # types and lint
-npm run smoke                                          # real browser, 16 checks
+npm run smoke                                          # real browser, 24 checks
 ./.venv/Scripts/python.exe scripts/check_palette.py    # colour blindness, contrast
 ./.venv/Scripts/python.exe scripts/check_migration.py  # SQL grammar, column contracts
 ./.venv/Scripts/python.exe scripts/test_db.py          # trust rules, needs Docker
@@ -122,7 +122,7 @@ its SELECT list are matched by position, so a mismatch parses cleanly and
 returns the wrong data.
 
 `test_db.py` starts a throwaway PostGIS container, applies the migration and
-runs `supabase/tests/trust_rules.sql`: 30 assertions over both flows, the
+runs `supabase/tests/trust_rules.sql`: 53 assertions over both flows, the
 constraints and the RPCs. It is not a vacuous suite; the bugs it was written
 for were re-introduced deliberately and it caught each one.
 
@@ -131,15 +131,18 @@ For the layer above the database, run the whole stack:
 ```bash
 npx supabase start        # Postgres, PostgREST, the lot, on 54321
 npm run dev
-./.venv/Scripts/python.exe scripts/test_api.py    # 24 assertions
+./.venv/Scripts/python.exe scripts/test_api.py    # 34 assertions
 npx supabase stop         # when you are done
 ```
 
-`npm run smoke` drives a real browser. It exists because the two worst bugs
-this project has had were both invisible to every other suite: a map pane that
-grew to 60,719px so exactly one tile loaded, and a MapLibre version whose
-worker Next could not bundle, which requested no tiles and raised no error.
-Both render a blank map with a clean console. Pass `mobile` as a third argument
+`npm run smoke` drives a real browser. It exists because the worst bugs this
+project has had were all invisible to every other suite: a map pane that grew
+to 60,719px so exactly one tile loaded; a MapLibre version whose worker Next
+could not bundle, which requested no tiles and raised no error; and a masthead
+carrying `sticky top-0 z-40` that scrolled away regardless, because an
+unlayered `.masthead { position: relative }` added for the keyline outranked
+the utility. The first two render a blank map with a clean console. The third
+renders a page whose markup says it is pinned. Pass `mobile` as a third argument
 to check a phone, which is how a pane that was zero pixels wide turned up.
 
 `test_api.py` drives the real route handlers, acting as several different
