@@ -11,6 +11,15 @@ export function formatDistance(metres: number | null): string | null {
   return `${(metres / 1000).toFixed(metres < 9500 ? 1 : 0)} ק״מ`;
 }
 
+/**
+ * Israel time, always, on both sides of hydration.
+ *
+ * Without an explicit zone the server formats in UTC and the browser in
+ * whatever the reader is in, so any timestamp near midnight renders a
+ * different day on each side. React notices and throws a hydration mismatch
+ * (#418), which is what 445 dated rows produced in production. The zone is
+ * also simply correct: these reports are about Israeli businesses.
+ */
 export function formatDate(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -19,6 +28,7 @@ export function formatDate(iso: string | null): string | null {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: "Asia/Jerusalem",
   }).format(d);
 }
 
