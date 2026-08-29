@@ -386,4 +386,69 @@ select assert_eq((select report_count from places where id = '66666666-6666-6666
 select assert_eq((select status from places where id = '66666666-6666-6666-6666-666666666666'),
                  'published', 'but confirming it did not make it easier to remove');
 
+
+-- ===========================================================================
+do $$ begin raise notice E'\nK. the near match that stands in for a shared identity'; end $$;
+-- ===========================================================================
+
+-- A Google link and an OSM pick for the same shop do not join on their refs,
+-- because they come from different issuers. Proximity plus name is what joins
+-- them instead, and it has to be both: two shops in one mall are metres apart
+-- and must stay two rows, while the same shop pinned twice is metres apart and
+-- must become one.
+insert into places (
+  id, source_key, name_he, category, location, city,
+  benefit_fighter_card, source, status, first_reported_at
+) values (
+  '77777777-7777-7777-7777-777777777777', 'k8', 'גולף מעלה אדומים', 'clothing',
+  'SRID=4326;POINT(35.2980 31.7770)', 'מעלה אדומים',
+  true, 'user_submission', 'published', now()
+), (
+  '88888888-8888-8888-8888-888888888888', 'k9', 'זיפ מעלה אדומים', 'clothing',
+  -- Roughly 30 m from the row above: the next unit along in the same mall.
+  'SRID=4326;POINT(35.2983 31.7771)', 'מעלה אדומים',
+  true, 'user_submission', 'published', now()
+);
+
+select assert_eq(
+  (select id from place_near_match(31.7770, 35.2981, 'גולף מעלה אדומים')),
+  '77777777-7777-7777-7777-777777777777'::uuid,
+  'the same shop pinned a few metres off matches itself');
+
+-- The name people type is usually the brand alone, while the row carries the
+-- branch. Plain trigram similarity scores this pair 0.294 and would file the
+-- report as a new place next door to itself.
+select assert_eq(
+  (select id from place_near_match(31.7770, 35.2980, 'גולף')),
+  '77777777-7777-7777-7777-777777777777'::uuid,
+  'the brand on its own still matches its branch');
+
+-- The case that made this function use word_similarity rather than
+-- similarity. Every shop in the mall carries the same town in its name, so the
+-- shared suffix dominates the trigram set: similarity() scores this 0.522
+-- against גולף and 0.545 against זיפ, and a third brand would have been
+-- swallowed by whichever it happened to sort above.
+select assert_eq(
+  (select count(*)::int from place_near_match(31.7770, 35.2981, 'קסטרו מעלה אדומים')),
+  0,
+  'a third brand in the same mall matches neither neighbour');
+
+select assert_eq(
+  (select count(*)::int from place_near_match(31.7771, 35.2983, 'אושיקה')),
+  0,
+  'a different shop in the same mall does not match');
+
+select assert_eq(
+  (select count(*)::int from place_near_match(31.7900, 35.2980, 'גולף מעלה אדומים')),
+  0,
+  'the same name a kilometre away does not match');
+
+-- A rejected row must not quietly absorb a new submission and come back.
+update places set status = 'rejected'
+ where id = '88888888-8888-8888-8888-888888888888';
+select assert_eq(
+  (select count(*)::int from place_near_match(31.7771, 35.2983, 'זיפ מעלה אדומים')),
+  0,
+  'a rejected place is not a merge candidate');
+
 do $$ begin raise notice E'\nall trust rule tests passed'; end $$;
