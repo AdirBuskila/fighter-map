@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import uuid
+from urllib.parse import quote
 
 import requests
 
@@ -37,6 +38,16 @@ CATEGORIES = {
 BASE = "http://localhost:3000"
 PASSED, FAILED = [], []
 
+# Appended to every fixture name, set once per run.
+#
+# place_near_match merges a submission into any published place within 75 m
+# whose name is the same name, so without this the second run against a given
+# database finds the first run's rows and answers "confirmed_existing" where
+# the test expects "published". The tag puts word_similarity between two runs
+# at about 0.65, under the 0.9 gate, and leaves the merges section I actually
+# tests at 1.000.
+RUN_TAG = ""
+
 
 def check(label: str, actual, expected) -> None:
     if actual == expected:
@@ -45,6 +56,14 @@ def check(label: str, actual, expected) -> None:
     else:
         FAILED.append(label)
         print("  FAIL  %-52s expected %r, got %r" % (label, expected, actual))
+
+
+def get(path: str) -> tuple:
+    response = requests.get(BASE + path, timeout=30)
+    try:
+        return response.status_code, response.json()
+    except json.JSONDecodeError:
+        return response.status_code, {"raw": response.text[:200]}
 
 
 def post(path: str, body: dict, ip: str) -> tuple:
@@ -63,7 +82,7 @@ def post(path: str, body: dict, ip: str) -> tuple:
 def submission(provider_ref: str, name: str, **overrides) -> dict:
     body = {
         "providerRef": provider_ref,
-        "nameHe": name,
+        "nameHe": name + RUN_TAG,
         "lat": 32.0853,
         "lng": 34.7818,
         "addressHe": "דיזנגוף 1, תל אביב",
@@ -96,7 +115,13 @@ def main() -> int:
     # reporter per hour and counted in the database, so reusing fixed addresses
     # would make the second run of the day fail on the first request.
     run = uuid.uuid4().hex[:12]
-    ref = "osm:node/9" + run[:8]
+    global RUN_TAG
+    RUN_TAG = " " + run[:5]
+    # Refs have to be numeric. Real OSM ids are, real Google cids are, and
+    # since the submission schema started checking the shape of an identity a
+    # hex run token no longer passes for one.
+    digits = "%09d" % (uuid.uuid4().int % 10**9)
+    ref = "osm:node/9" + digits[:8]
 
     actors: dict = {}
 
@@ -167,9 +192,14 @@ def main() -> int:
     # corroborated place takes three independent reporters to pull. A place
     # nobody has backed up must not: if adding costs one person and removing
     # costs three, a map anybody can write to fills with noise it cannot shed.
-    solo_ref = "osm:node/7" + run[:8]
+    solo_ref = "osm:node/7" + digits[:8]
+    # Its own point, a few streets from the burger fixture. Every submission in
+    # this file used to sit on one coordinate, which was harmless until
+    # place_near_match started reading position: two fixtures 0 m apart make
+    # the merge decide whether they are one place on the name alone.
     status, body = post("/api/submissions",
-                        submission(solo_ref, "פלאפל בדיקה"), ip("nina"))
+                        submission(solo_ref, "פלאפל בדיקה", lat=32.0951, lng=34.7749),
+                        ip("nina"))
     check("a second place is added by one person", status, 200)
     solo_id = body.get("placeId")
 
@@ -250,7 +280,7 @@ def main() -> int:
 
         status, _ = post("/api/admin", {
             "action": "locate", "placeId": pinless, "password": args.admin_password,
-            "location": {"providerRef": "osm:node/8" + run[:8], "lat": 32.0853,
+            "location": {"providerRef": "osm:node/8" + digits[:8], "lat": 32.0853,
                          "lng": 34.7818,
                          "addressHe": "דיזנגוף 1",
                          "city": "תל אביב"}}, ip("mod"))
@@ -285,6 +315,81 @@ def main() -> int:
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("and one new report does not re-flip it",
           "דווח שלא עבד" in detail.text, False)
+
+    print("\nI. the same shop from two different issuers")
+    # A Google link and an OSM pick carry refs that can never be equal, so the
+    # only thing that can join them is where they are and what they are called.
+    osm_ref = "osm:node/6" + digits[:8]
+    status, first = post("/api/submissions",
+                         submission(osm_ref, "מסעדת גופנא", lat=32.0550, lng=35.2900),
+                         ip("dana"))
+    check("an osm-sourced place is created", status, 200)
+    check("it publishes on arrival", first.get("outcome"), "published")
+    gofna = first.get("placeId")
+
+    status, second = post("/api/submissions",
+                          submission("gmaps:cid/60000" + digits[:6], "גופנא",
+                                     lat=32.05511, lng=35.29003),
+                          ip("erez"))
+    check("a google link for the same shop merges", status, 200)
+    check("it confirms rather than duplicating", second.get("outcome"),
+          "confirmed_existing")
+    check("and lands on the same row", second.get("placeId"), gofna)
+
+    # Metres away, different business. This is the pair that made the name test
+    # word_similarity rather than similarity.
+    status, third = post("/api/submissions",
+                         submission("gmaps:cid/60001" + digits[:6], "אושיקה",
+                                    lat=32.05512, lng=35.29005),
+                         ip("gil"))
+    check("a different shop metres away is its own row", status, 200)
+    check("it publishes rather than merging", third.get("outcome"), "published")
+    check("on a new id", third.get("placeId") != gofna, True)
+
+    # A dropped pin carries no google id at all. Allowed, because the shops
+    # this feature exists for are exactly the ones no database lists well; the
+    # near match is the only dedupe such a row gets.
+    status, fourth = post("/api/submissions",
+                          submission(None, "צימר מנוחה בשמחה",
+                                     lat=32.0560, lng=35.2930,
+                                     category="zimmer",
+                                     benefitFighterCard=False,
+                                     benefitVacationVoucher=True),
+                          ip("hila"))
+    check("a dropped pin with no google id is accepted", status, 200)
+
+    # But a ref nobody issued is not. With two issuers in play the field has to
+    # name one of them, or the identity column stops meaning anything.
+    status, _ = post("/api/submissions",
+                     submission("whatever-i-like", "חנות מזויפת",
+                                lat=32.0570, lng=35.2940),
+                     ip("ivan"))
+    check("an unrecognised provider ref is refused", status, 400)
+
+    print("\nJ. a google maps link becomes a point")
+    status, body = get("/api/resolve-link?url=" + quote(
+        "https://www.google.com/maps/place/x/@31.8005,35.3105,17z/data="
+        "!4m6!3m5!1s0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4!8m2!3d31.8006!4d35.3107"))
+    check("a long link resolves", status, 200)
+    check("the marker wins over the viewport", body.get("lat"), 31.8006)
+    check("and the google id comes through", body.get("providerRef"),
+          "gmaps:ftid/0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4")
+
+    status, _ = get("/api/resolve-link?url=" + quote(
+        "https://www.google.com/maps/place/Brandenburger+Tor/@52.5163,13.3777,17z"))
+    check("a link outside Israel is refused", status, 400)
+
+    # The route makes an outbound fetch, so the host allowlist is the only
+    # thing standing between it and being a request-forgery hole. Neither of
+    # these may leave the server at all.
+    status, _ = get("/api/resolve-link?url=" + quote("http://169.254.169.254/latest/meta-data/"))
+    check("a link to the metadata service is refused", status, 400)
+
+    status, _ = get("/api/resolve-link?url=" + quote("https://goo.gl.evil.example/x"))
+    check("a lookalike short-link host is refused", status, 400)
+
+    status, _ = get("/api/resolve-link?url=" + quote("אופירה 6, מישור אדומים"))
+    check("plain text is refused", status, 400)
 
     print("\n%d passed, %d failed" % (len(PASSED), len(FAILED)))
     if FAILED:

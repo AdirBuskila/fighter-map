@@ -110,6 +110,7 @@ a fix you make survives every future rerun.
 
 ```bash
 npm run check                                          # types and lint
+npm run gmaps                                          # Google Maps URL parser, 21 cases
 npm run smoke                                          # real browser, 24 checks
 ./.venv/Scripts/python.exe scripts/check_palette.py    # colour blindness, contrast
 ./.venv/Scripts/python.exe scripts/check_migration.py  # SQL grammar, column contracts
@@ -201,10 +202,34 @@ private individuals' mobile numbers verbatim, and the OSM extract is 119 MB.
 | Confirmed in the last 30 days badges "אומת החודש" | `isFresh()` in `src/lib/format.ts` |
 | Never confirmed here states its age in plain text, no badge | `isUnverified()` + `LastSignalLine` |
 | 5 reports per reporter per hour | `rateLimited()` in the route handlers |
+| A submission within 75 m of an existing place, under the same name, confirms it instead of adding a pin | `place_near_match()` + `/api/submissions` |
 
 Coverage is the honest weak spot of going key-free. OSM knows 209 of the 610
-imported single locations; Google would have found most of the rest. The other
-396 are not lost: `/admin` lets a moderator search and pin one in a few
+imported single locations; Google would have found most of the rest.
+
+That gap is also what people write in about: they go to add a shop, the search
+cannot find it, and they give up and send an email instead. So `/add` takes a
+**Google Maps link** as a fallback, and offers it by itself the moment a search
+returns nothing. `src/lib/gmaps.ts` reads the point out of the URL; a phone
+share link carries no coordinates at all, so `/api/resolve-link` expands it
+first, against a host allowlist that is the only thing keeping an outbound
+fetch a stranger can trigger from being a request-forgery hole.
+
+Not every share link is a map link. `share.google`, which is what Chrome's
+share sheet produces, redirects to a Google *Search* page: it identifies the
+business by knowledge-graph id and carries no position at all. The form says so
+and tells the person to open it in Maps and copy the address bar, which is the
+only thing that actually works.
+
+The cost is that identity now has two issuers, and `osm:node/123` and
+`gmaps:ftid/0x..:0x..` for one shop will never be equal. `place_near_match()`
+stands in for the join: near in space and near in name, both, or two shops in
+one mall collapse into each other. It uses `word_similarity` rather than
+`similarity` because Israeli branch names vary by gaining or losing a town
+around the brand, and plain trigram similarity scores two *different* shops in
+one mall (0.571) above the *same* shop written two ways (0.294).
+
+The other 396 are not lost: `/admin` lets a moderator search and pin one in a few
 seconds, and a pinned place merges correctly with any later user submission for
 the same shop because identity still comes from the provider.
 

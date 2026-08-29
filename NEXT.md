@@ -1,9 +1,25 @@
 # Where this is up to
 
-Everything below is committed, deployed, and applied to the production
-database. Migrations 0001 to 0004 are all in. One optional item is open.
+Migrations 0001 to 0004 are applied to the production database, and
+everything resting on them is committed and deployed. **0005 is not applied
+yet** — see item 1. One optional item is open besides.
 
-## 1. Turnstile is not configured
+## 1. Migration 0005 has not been run on production
+
+`supabase/migrations/0005_link_submissions.sql` adds `place_near_match()`, and
+`/api/submissions` calls it on every submission whose provider ref does not
+already exist. Until it is applied, that call errors. The route survives it --
+the failure is logged and the submission goes in as a new row rather than a
+merge, which is the safe direction — but every link submission will create a
+duplicate pin instead of confirming the place already there.
+
+SQL editor, paste the file, run. To check it took:
+
+```sql
+select proname from pg_proc where proname = 'place_near_match';
+```
+
+## 2. Turnstile is not configured
 
 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are empty, so the
 bot check is skipped. The five-per-hour rate limit still applies, and since
@@ -13,6 +29,14 @@ Vercel.
 
 ## How contribution works
 
+- there are **two ways in**. The OpenStreetMap typeahead is still first,
+  because when it works it supplies an address, a category and an identity
+  that joins with the imported corpus. Underneath it sits a **Google Maps
+  link**, which opens by itself the moment a search returns nothing
+- a link submission may carry **no `provider_ref` at all**, when the link is a
+  dropped pin rather than a listed business. That is deliberate: minting
+  `gmaps:at/31.80,35.31` would write a false identity a later submission
+  collides with. `place_near_match()` is the dedupe there
 - a submission is **published the moment it is sent**, and the contributor is
   taken straight to its page
 - it is drawn **hollow on the map** and badged **דיווח אחד** until a second,
@@ -38,6 +62,14 @@ select position('cur_source' in prosrc) > 0 as new_trust_rule
 `places_all` returns 23 columns including `source`.
 
 ## Also worth knowing
+
+- `/api/resolve-link` is **the only outbound fetch a stranger can trigger** in
+  this app. It will only ever request `maps.app.goo.gl`, `goo.gl` and `g.co`,
+  re-checks the host at every redirect hop, and stops at three hops and six
+  seconds. Anything else is parsed without a socket being opened. Do not
+  "simplify" it into fetching whatever URL it is handed; `scripts/test_api.py`
+  section J holds it down with the AWS metadata address and a
+  `goo.gl.evil.example` lookalike
 
 - 209 of 610 imported places have coordinates. OSM does not know most small
   Israeli businesses. The other 396 sit in `/admin`, where a moderator can

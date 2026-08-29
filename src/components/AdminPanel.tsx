@@ -286,7 +286,12 @@ function QueueItem({
             compact
             initialQuery={[row.name_he, row.city].filter(Boolean).join(" ")}
             placeholder="חפשו את העסק"
-            onPick={(picked: PickedPlace) =>
+            onPick={(picked: PickedPlace) => {
+              // Pinning a place is the one write that still demands an
+              // identity from the provider, and a pick from this component
+              // always carries one. The guard is for the type, not for a case
+              // that can happen here.
+              if (!picked.providerRef) return;
               onAct(row.id, "locate", {
                 location: {
                   providerRef: picked.providerRef,
@@ -295,8 +300,8 @@ function QueueItem({
                   addressHe: picked.addressHe,
                   city: picked.city ?? row.city,
                 },
-              })
-            }
+              });
+            }}
             onClear={() => undefined}
           />
         </div>

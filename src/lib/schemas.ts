@@ -3,6 +3,18 @@ import { CATEGORY_ORDER } from "./types";
 
 const uuid = z.string().uuid("מזהה מקום לא תקין");
 
+/**
+ * The issuers of place identity, and the shapes they issue.
+ *
+ * This used to be any non-empty string, which was fine while OpenStreetMap was
+ * the only issuer and the ref could only come from picking a search result.
+ * With Google links accepted the field is caller-supplied in a second way, and
+ * an unconstrained identity column is how one row gets claimed by a ref nobody
+ * can trace back to anything.
+ */
+export const PROVIDER_REF =
+  /^(?:osm:(?:node|way|relation)\/\d{1,20}|gmaps:(?:ftid\/0x[0-9a-f]{1,16}:0x[0-9a-f]{1,16}|cid\/\d{1,20}|place\/[\w-]{10,128}|mid\/g\/\w{4,32}))$/;
+
 /** "עבד לי" / "לא עבד לי" on an existing place. */
 export const reportInput = z.object({
   placeId: uuid,
@@ -16,12 +28,15 @@ export type ReportInput = z.infer<typeof reportInput>;
 /**
  * A new place from /add.
  *
- * providerRef is required and comes from picking a search result, never from
- * typing. That is what keeps the dataset joinable: two people submitting the
- * same shop land on the same row instead of creating a near-duplicate.
+ * providerRef comes from picking a search result or from a Google Maps link,
+ * never from typing. Where the link carries no Google id, it is null, which is
+ * the honest answer: minting gmaps:at/31.80,35.31 would write a false identity
+ * that a later submission collides with. The column is nullable and merely
+ * UNIQUE, and Postgres permits many nulls, so what keeps the dataset joinable
+ * there is place_near_match() rather than the ref.
  */
 export const submissionInput = z.object({
-  providerRef: z.string().min(1, "צריך לבחור מקום מהרשימה"),
+  providerRef: z.string().regex(PROVIDER_REF, "מזהה המקום לא תקין").nullable(),
   nameHe: z.string().trim().min(1, "חסר שם המקום").max(160),
   lat: z.number().gte(-90).lte(90),
   lng: z.number().gte(-180).lte(180),
@@ -59,7 +74,7 @@ export const adminActionInput = z.object({
   // picks, so identity still comes from the provider and never from typing.
   location: z
     .object({
-      providerRef: z.string().min(1),
+      providerRef: z.string().regex(PROVIDER_REF, "מזהה המקום לא תקין"),
       lat: z.number().gte(-90).lte(90),
       lng: z.number().gte(-180).lte(180),
       addressHe: z.string().trim().max(300).nullable().optional(),
