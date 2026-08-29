@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import PlacePicker, { type PickedPlace } from "./PlacePicker";
+import GoogleLinkPicker from "./GoogleLinkPicker";
 import Turnstile from "./Turnstile";
 import { CATEGORY_LABELS, CATEGORY_ORDER, type Category } from "@/lib/types";
 
@@ -15,6 +16,7 @@ export default function AddPlaceForm() {
 function Form() {
   const router = useRouter();
   const [picked, setPicked] = useState<PickedPlace | null>(null);
+  const [emptyQuery, setEmptyQuery] = useState<string | null>(null);
   const [category, setCategory] = useState<Category>("other");
   const [fighter, setFighter] = useState(false);
   const [voucher, setVoucher] = useState(false);
@@ -30,11 +32,23 @@ function Form() {
   } | null>(null);
 
   const handlePick = useCallback((place: PickedPlace) => {
-    setPicked(place);
-    setCategory(place.category);
+    setPicked((previous) => {
+      // The link picker re-emits on every keystroke in its name field, so only
+      // a genuinely different place may reset a category the person chose by
+      // hand. Comparing the ref alone is not enough: a link with no Google id
+      // sends null, and two of those in a row are not the same place.
+      const same =
+        previous !== null &&
+        previous.providerRef === place.providerRef &&
+        previous.lat === place.lat &&
+        previous.lng === place.lng;
+      if (!same) setCategory(place.category);
+      return place;
+    });
     setError(null);
   }, []);
   const handleClear = useCallback(() => setPicked(null), []);
+  const handleEmpty = useCallback((query: string | null) => setEmptyQuery(query), []);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -129,7 +143,14 @@ function Form() {
 
   return (
     <form onSubmit={submit} noValidate>
-      <PlacePicker onPick={handlePick} onClear={handleClear} />
+      <PlacePicker onPick={handlePick} onClear={handleClear} onEmpty={handleEmpty} />
+
+      <GoogleLinkPicker
+        open={emptyQuery !== null}
+        suggestedName={emptyQuery ?? ""}
+        onPick={handlePick}
+        onClear={handleClear}
+      />
 
       {picked && (
         <div

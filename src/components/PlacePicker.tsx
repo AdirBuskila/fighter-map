@@ -5,7 +5,9 @@ import { currentPosition } from "@/lib/geo";
 import type { Category } from "@/lib/types";
 
 export type PickedPlace = {
-  providerRef: string;
+  /** Null only from a Google Maps link that carries no place id. A pick from
+   *  this component always has one, which is why /admin's locate can insist. */
+  providerRef: string | null;
   nameHe: string;
   lat: number;
   lng: number;
@@ -39,12 +41,18 @@ type Result = {
 export default function PlacePicker({
   onPick,
   onClear,
+  onEmpty,
   compact = false,
   initialQuery = "",
   placeholder = "חיפוש בית העסק במפת העולם",
 }: {
   onPick: (place: PickedPlace) => void;
   onClear: () => void;
+  /** Fires with the query whenever a finished search returned nothing, and
+   *  with null otherwise. The Google link fallback opens on it: that is the
+   *  exact moment somebody is stuck, and a disclosure they have to go looking
+   *  for is one most people never find. Must be stable across renders. */
+  onEmpty?: (query: string | null) => void;
   /** Inline variant for the moderation queue: no label, no helper text. */
   compact?: boolean;
   initialQuery?: string;
@@ -74,6 +82,7 @@ export default function PlacePicker({
     const term = query.trim();
     if (term.length < 2) {
       setResults([]);
+      onEmpty?.(null);
       setOpen(false);
       return;
     }
@@ -95,9 +104,15 @@ export default function PlacePicker({
           setError(body.error ?? "החיפוש נכשל, נסו שוב");
           return;
         }
-        setResults(body.results ?? []);
+        const hits = body.results ?? [];
+        setResults(hits);
+        onEmpty?.(hits.length === 0 ? term : null);
         setActive(-1);
-        setOpen(true);
+        // A caller that handles the empty case gets no empty dropdown. The
+        // list floats over whatever follows it, and what follows it here is
+        // the link fallback that just opened, so a one-line "not found" would
+        // sit on top of the answer to it.
+        setOpen(hits.length > 0 || !onEmpty);
       } catch (cause) {
         if ((cause as Error)?.name !== "AbortError") {
           setError("אין חיבור לרשת. בדקו את החיבור ונסו שוב");
@@ -111,7 +126,7 @@ export default function PlacePicker({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, onEmpty]);
 
   useEffect(() => {
     function onDocumentClick(event: MouseEvent) {
