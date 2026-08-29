@@ -71,13 +71,14 @@ SELF_REPORTED = [
         # number in address_he, which is what anybody navigating will use.
         "lat": 31.79588,
         "lng": 35.33687,
+        "provider_ref": None,
         "note_he": "15% הנחה על ביגוד Carhartt בתשלום בכרטיס פייטר. " + FROM_BUSINESS,
     },
     {
         "source_key": "reported:shilo-zimmer-menucha-besimcha",
         "name_he": "צימר מנוחה בשמחה",
         "city": "שילה",
-        "address_he": None,
+        "address_he": "שילה",
         "phone": "054-6344873",
         "category": "zimmer",
         # Voucher only, and that is not an oversight. The card is for goods;
@@ -85,9 +86,14 @@ SELF_REPORTED = [
         # correction the owner sent in with the listing.
         "fighter": False,
         "voucher": True,
-        "lat": None,
-        "lng": None,
-        "note_he": "צימר זוגי עם ג'קוזי ומרפסת נוף. " + FROM_BUSINESS,
+        # The village, not the door. This one has no Google listing at all, so
+        # there is nothing more exact to be had, and the note says so rather
+        # than letting the pin imply a precision it does not have.
+        "lat": 32.05522,
+        "lng": 35.29949,
+        "provider_ref": None,
+        "note_he": "צימר זוגי עם ג'קוזי ומרפסת נוף. הסימון על היישוב שילה, לא על הצימר עצמו. "
+                   + FROM_BUSINESS,
     },
 ]
 
@@ -95,41 +101,50 @@ SELF_REPORTED = [
 WITNESSED = [
     {
         "source_key": "reported:gofna-shilo",
-        "name_he": "מסעדת גופנא",
+        # Google lists it as "גופנה - מסעדת שף הררית". The reporter called it
+        # גופנא, which is what somebody looking for it will type.
+        "name_he": "גופנא - מסעדת שף הררית",
         "city": "שילה",
-        "address_he": None,
-        "phone": None,
+        "address_he": "שילה הקדומה",
+        "phone": "050-6576116",
         "category": "restaurant",
         "fighter": True,
         "voucher": False,
-        "lat": None,
-        "lng": None,
+        "lat": 32.0512254,
+        "lng": 35.291046,
+        "provider_ref": "gmaps:ftid/0x151cd9988e4acb5d:0x3e1b948d6d63712",
         "note_he": FROM_RESERVIST,
     },
     {
         "source_key": "reported:golf-maale-adumim",
         "name_he": "גולף מעלה אדומים",
         "city": "מעלה אדומים",
-        "address_he": None,
-        "phone": None,
+        "address_he": "דרך קדם 5, קניון עופר אדומים, קומה 1",
+        "phone": "073-7091077",
         "category": "clothing",
         "fighter": True,
         "voucher": False,
-        "lat": None,
-        "lng": None,
+        "lat": 31.7716621,
+        "lng": 35.2985222,
+        "provider_ref": "gmaps:ftid/0x1503294a153571ed:0xd483dac83d27324c",
         "note_he": FROM_RESERVIST,
     },
     {
         "source_key": "reported:zip-maale-adumim",
         "name_he": "זיפ מעלה אדומים",
         "city": "מעלה אדומים",
-        "address_he": None,
-        "phone": None,
+        "address_he": "דרך קדם 5, קניון עופר אדומים, קומה 2",
+        "phone": "02-5353602",
         "category": "clothing",
         "fighter": True,
         "voucher": False,
-        "lat": None,
-        "lng": None,
+        # 67 m from גולף above, in the same mall. That is inside the 75 m the
+        # merge searches, so these two rows are the live case for why
+        # place_near_match tests the name with word_similarity: plain trigram
+        # similarity scores this pair 0.571 and would fuse them into one shop.
+        "lat": 31.7715233,
+        "lng": 35.2978326,
+        "provider_ref": "gmaps:ftid/0x1503294bcbd1c157:0x5a2c5e54d930dbdf",
         "note_he": FROM_RESERVIST,
     },
     {
@@ -141,8 +156,13 @@ WITNESSED = [
         "category": "clothing",
         "fighter": True,
         "voucher": False,
+        # Neither OSM nor Google has a business by this name in Maale Adumim,
+        # under this spelling or any near it, so there is nothing to pin it to.
+        # It waits in /admin rather than taking the mall's own coordinates,
+        # which would put a shop on the map that may not be in that building.
         "lat": None,
         "lng": None,
+        "provider_ref": None,
         "note_he": FROM_RESERVIST,
     },
 ]
@@ -158,11 +178,12 @@ def row_for(place: dict, now: str) -> dict:
     located = place["lat"] is not None and place["lng"] is not None
     return {
         "source_key": place["source_key"],
-        # Null on purpose. OpenStreetMap has no record of any of these, and the
-        # only refs on offer were the streets and malls they sit in. Writing
-        # "this row IS קניון אדומים" would be a false identity that a later
-        # submission of the mall itself collides with.
-        "provider_ref": None,
+        # Google's own id where the business has a listing, which is what lets
+        # a later /add submission of the same link land on this row instead of
+        # beside it. Null where it has none: the only refs on offer there were
+        # the street or the mall, and writing "this row IS קניון אדומים" is a
+        # false identity that a submission of the mall itself collides with.
+        "provider_ref": place["provider_ref"],
         "name_he": place["name_he"],
         "category": place["category"],
         "is_chain": False,
@@ -217,8 +238,8 @@ def main() -> int:
                  "witness" if row["source_key"] in witnessed_keys else "business"))
 
     if queued:
-        print("\nthe %d without a pin are the point of the link path: a Google Maps" % len(queued))
-        print("link for each resolves in one paste, and rerunning this promotes them.")
+        print("\n%d still without a pin. A Google Maps link resolves one in a paste," % len(queued))
+        print("and rerunning this promotes it out of the queue.")
 
     if args.dry_run:
         print("\ndry run, nothing sent")
