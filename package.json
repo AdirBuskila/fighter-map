@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && eslint src --max-warnings=0",
-    "smoke": "node tools/smoke.js"
+    "smoke": "node tools/smoke.js",
+    "gmaps": "node --experimental-strip-types tools/gmaps_cases.mjs"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-rtl-text": "^0.4.0",
