@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import uuid
+from urllib.parse import quote
 
 import requests
 
@@ -45,6 +46,14 @@ def check(label: str, actual, expected) -> None:
     else:
         FAILED.append(label)
         print("  FAIL  %-52s expected %r, got %r" % (label, expected, actual))
+
+
+def get(path: str) -> tuple:
+    response = requests.get(BASE + path, timeout=30)
+    try:
+        return response.status_code, response.json()
+    except json.JSONDecodeError:
+        return response.status_code, {"raw": response.text[:200]}
 
 
 def post(path: str, body: dict, ip: str) -> tuple:
@@ -285,6 +294,31 @@ def main() -> int:
     detail = requests.get(f"{BASE}/place/{place_id}", timeout=30)
     check("and one new report does not re-flip it",
           "דווח שלא עבד" in detail.text, False)
+
+    print("\nI. a google maps link becomes a point")
+    status, body = get("/api/resolve-link?url=" + quote(
+        "https://www.google.com/maps/place/x/@31.8005,35.3105,17z/data="
+        "!4m6!3m5!1s0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4!8m2!3d31.8006!4d35.3107"))
+    check("a long link resolves", status, 200)
+    check("the marker wins over the viewport", body.get("lat"), 31.8006)
+    check("and the google id comes through", body.get("providerRef"),
+          "gmaps:ftid/0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4")
+
+    status, _ = get("/api/resolve-link?url=" + quote(
+        "https://www.google.com/maps/place/Brandenburger+Tor/@52.5163,13.3777,17z"))
+    check("a link outside Israel is refused", status, 400)
+
+    # The route makes an outbound fetch, so the host allowlist is the only
+    # thing standing between it and being a request-forgery hole. Neither of
+    # these may leave the server at all.
+    status, _ = get("/api/resolve-link?url=" + quote("http://169.254.169.254/latest/meta-data/"))
+    check("a link to the metadata service is refused", status, 400)
+
+    status, _ = get("/api/resolve-link?url=" + quote("https://goo.gl.evil.example/x"))
+    check("a lookalike short-link host is refused", status, 400)
+
+    status, _ = get("/api/resolve-link?url=" + quote("אופירה 6, מישור אדומים"))
+    check("plain text is refused", status, 400)
 
     print("\n%d passed, %d failed" % (len(PASSED), len(FAILED)))
     if FAILED:
