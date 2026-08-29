@@ -30,7 +30,12 @@ export type GoogleMapsParse =
   | { kind: "outside_israel"; lat: number; lng: number }
   | { kind: "not_a_map_link" };
 
-const SHORT_HOSTS = new Set(["maps.app.goo.gl", "goo.gl", "g.co"]);
+// share.google is the one Chrome's share sheet produces now, and it is worth
+// knowing what it expands to: a Google *Search* page carrying a
+// knowledge-graph id and no coordinates at all, not a Maps URL. It still
+// belongs here, because recognising it is what turns "this is not a map link"
+// into "open it in Maps and copy the address bar", which a person can act on.
+const SHORT_HOSTS = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "share.google"]);
 
 /** google.com, google.co.il, maps.google.com, maps.google.co.il. */
 const MAPS_HOST = /^(?:maps\.)?google\.[a-z]{2,3}(?:\.[a-z]{2,3})?$/;
@@ -59,6 +64,11 @@ const PLUS_CODE = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b/i
 const URL_IN_TEXT = /https?:\/\/[^\s<>"]+/gi;
 const TRAILING_PUNCT = /[.,;:!?')\]}]+$/;
 
+// Google hands back listing names with bidi controls embedded — a real one
+// ends "…שף הררית-‭". Invisible, so it survives every eyeball check, and
+// it would be stored and then rendered into an already-RTL page.
+const BIDI_CONTROLS = /[‎‏‪-‮⁦-⁩​﻿]/g;
+
 function hostKind(host: string): "short" | "maps" | null {
   const bare = host.toLowerCase().replace(/^www\./, "");
   if (SHORT_HOSTS.has(bare)) return "short";
@@ -84,6 +94,13 @@ function firstGoogleUrl(input: string): URL | null {
 export function isGoogleShortLink(input: string): boolean {
   const url = firstGoogleUrl(input);
   return url !== null && hostKind(url.host) === "short";
+}
+
+/** Any host this module recognises, short or full. The expander needs this
+ *  separately from parseGoogleMapsUrl, which cannot tell "not Google at all"
+ *  from "Google, but this particular URL says nothing yet". */
+export function isGoogleUrl(input: string): boolean {
+  return firstGoogleUrl(input) !== null;
 }
 
 function fromParams(url: URL): [number, number] | null {
@@ -115,6 +132,12 @@ function identity(url: URL): string | null {
     url.searchParams.get("query_place_id") ?? url.searchParams.get("place_id");
   if (placeId && /^[\w-]{10,128}$/.test(placeId)) return `gmaps:place/${placeId}`;
 
+  // A share.google link lands on a search page, whose only durable handle on
+  // the business is the knowledge-graph id. Worth keeping even without a
+  // position: it is what a later paste of the same business joins on.
+  const kgmid = url.searchParams.get("kgmid");
+  if (kgmid && /^\/g\/[\w]{4,32}$/.test(kgmid)) return `gmaps:mid${kgmid}`;
+
   return null;
 }
 
@@ -124,7 +147,9 @@ function suggestedName(url: URL): string | null {
 
   let text: string;
   try {
-    text = decodeURIComponent(segment.replace(/\+/g, " ")).trim();
+    text = decodeURIComponent(segment.replace(/\+/g, " "))
+      .replace(BIDI_CONTROLS, "")
+      .trim();
   } catch {
     return null;
   }

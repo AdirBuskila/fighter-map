@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/server/security";
 import {
-  isGoogleShortLink,
+  isGoogleUrl,
   parseGoogleMapsUrl,
   type GoogleMapsPin,
 } from "@/lib/gmaps";
@@ -15,9 +15,9 @@ import {
  * case. A long URL never reaches here; the client parses it itself.
  *
  * It is the only outbound fetch a stranger can trigger in this app, so the
- * shape is deliberately narrow. Only the three short-link hosts are ever
+ * shape is deliberately narrow. Only the four short-link hosts are ever
  * requested, every redirect hop is re-checked before it is followed, and the
- * whole thing is capped at three hops and six seconds. Point it at anything
+ * whole thing is capped at four hops and six seconds each. Point it at anything
  * else and it parses the string without opening a socket, which is what keeps
  * it from being a request-forgery hole.
  *
@@ -27,7 +27,7 @@ import {
  * quota on getting the form to work.
  */
 
-const MAX_HOPS = 3;
+const MAX_HOPS = 4;
 const PHOTON_REVERSE = "https://photon.komoot.io/reverse";
 const UA = "fighter-map/1.0 (community benefit map for Israeli reservists)";
 
@@ -50,17 +50,26 @@ async function expand(shortUrl: string): Promise<string | null> {
     }
 
     const location = response.headers.get("location");
-    if (!location) return null;
+    // A hop that stops redirecting is the end of the chain, whatever it is.
+    if (!location) return current === shortUrl ? null : current;
 
     const next = new URL(location, current).href;
     // Re-check every hop. A redirect chain that starts at Google is not a
     // promise that it stays there.
-    if (!isGoogleShortLink(next)) {
-      return parseGoogleMapsUrl(next).kind === "not_a_map_link" ? null : next;
-    }
+    if (!isGoogleUrl(next)) return null;
     current = next;
+
+    // Stop as soon as the URL says something, rather than at the first hop
+    // that is no longer a short link. A share.google link goes short link ->
+    // an interstitial on www.google.com -> a search page carrying the
+    // knowledge-graph id, and that middle URL parses as nothing at all, so
+    // "not a map link yet" is not a reason to give up on the chain.
+    const parsed = parseGoogleMapsUrl(current);
+    if (parsed.kind !== "not_a_map_link" && parsed.kind !== "needs_expanding") {
+      return current;
+    }
   }
-  return null;
+  return current === shortUrl ? null : current;
 }
 
 /** City and street, so a link submission is not a poorer row than a searched

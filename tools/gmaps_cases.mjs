@@ -87,6 +87,32 @@ const CASES = [
     expect: { kind: "no_position", providerRef: "gmaps:ftid/0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4" },
   },
   {
+    // share.google is what Chrome's own share sheet produces now, and it is
+    // not a Maps link: it redirects to a Google *Search* page carrying a
+    // knowledge-graph id and no coordinates at all.
+    name: "the new share.google host needs expanding",
+    input: "https://share.google/753bK56LgELaZkH4Q",
+    expect: { kind: "needs_expanding", url: "https://share.google/753bK56LgELaZkH4Q" },
+  },
+  {
+    name: "a search page with a knowledge-graph id identifies but does not locate",
+    input: "https://www.google.com/search?kgmid=/g/11rsfh4hz9&q=%D7%92%D7%95%D7%A4%D7%A0%D7%94",
+    expect: { kind: "no_position", providerRef: "gmaps:mid/g/11rsfh4hz9" },
+  },
+  {
+    // Google returns the listing name with a trailing U+202D. Invisible, and
+    // it would be written to the database and rendered into an RTL page.
+    name: "bidi control characters are stripped from the name",
+    input: "https://www.google.com/maps/place/%D7%92%D7%95%D7%A4%D7%A0%D7%94+-+%D7%9E%D7%A1%D7%A2%D7%93%D7%AA+%D7%A9%D7%A3+%D7%94%D7%A8%D7%A8%D7%99%D7%AA-%E2%80%AD/@32.0512254,35.291046,17z/data=!3m1!4b1!4m6!3m5!1s0x151cd9988e4acb5d:0x3e1b948d6d63712!8m2!3d32.0512254!4d35.291046!16s%2Fg%2F11rsfh4hz9",
+    expect: {
+      kind: "pin",
+      lat: 32.0512254,
+      lng: 35.291046,
+      providerRef: "gmaps:ftid/0x151cd9988e4acb5d:0x3e1b948d6d63712",
+      name: "גופנה - מסעדת שף הררית-",
+    },
+  },
+  {
     name: "Berlin is a mistake, not a contribution",
     input: "https://www.google.com/maps/place/Brandenburger+Tor/@52.5163,13.3777,17z",
     expect: { kind: "outside_israel", lat: 52.5163, lng: 13.3777 },
@@ -146,6 +172,8 @@ for (const testCase of CASES) {
 // checked on its own rather than inferred from the table above.
 const SHORT = [
   ["https://maps.app.goo.gl/x", true],
+  ["https://share.google/753bK56LgELaZkH4Q", true],
+  ["https://share.google.evil.example/x", false],
   ["https://goo.gl/maps/x", true],
   ["https://www.google.com/maps/place/x/@31.8,35.3,17z", false],
   ["https://goo.gl.evil.example/x", false],

@@ -13,7 +13,7 @@ const uuid = z.string().uuid("מזהה מקום לא תקין");
  * can trace back to anything.
  */
 export const PROVIDER_REF =
-  /^(?:osm:(?:node|way|relation)\/\d{1,20}|gmaps:(?:ftid\/0x[0-9a-f]{1,16}:0x[0-9a-f]{1,16}|cid\/\d{1,20}|place\/[\w-]{10,128}))$/;
+  /^(?:osm:(?:node|way|relation)\/\d{1,20}|gmaps:(?:ftid\/0x[0-9a-f]{1,16}:0x[0-9a-f]{1,16}|cid\/\d{1,20}|place\/[\w-]{10,128}|mid\/g\/\w{4,32}))$/;
 
 /** "עבד לי" / "לא עבד לי" on an existing place. */
 export const reportInput = z.object({
