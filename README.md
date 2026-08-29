@@ -215,6 +215,12 @@ share link carries no coordinates at all, so `/api/resolve-link` expands it
 first, against a host allowlist that is the only thing keeping an outbound
 fetch a stranger can trigger from being a request-forgery hole.
 
+Not every share link is a map link. `share.google`, which is what Chrome's
+share sheet produces, redirects to a Google *Search* page: it identifies the
+business by knowledge-graph id and carries no position at all. The form says so
+and tells the person to open it in Maps and copy the address bar, which is the
+only thing that actually works.
+
 The cost is that identity now has two issuers, and `osm:node/123` and
 `gmaps:ftid/0x..:0x..` for one shop will never be equal. `place_near_match()`
 stands in for the join: near in space and near in name, both, or two shops in
