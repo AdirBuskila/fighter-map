@@ -21,6 +21,11 @@ Two provenances, and they must not be treated alike.
 note_he says which of the two it is, so a page never implies a reservist has
 been somewhere nobody has been.
 
+A row may be an ONLINE shop instead of an address: is_online, a url, and no
+pin. The schema forbids an online row from carrying a point at all, so those
+publish without one rather than queueing in /admin for a pin that must never
+come.
+
 COORDINATES ARE THE PART THAT GOES WRONG SILENTLY. A row with lat/lng None is
 loaded as 'pending' with review_reason='no_osm_match' and waits in /admin,
 where a moderator searches and pins it in a few seconds. That is deliberately
@@ -95,6 +100,61 @@ SELF_REPORTED = [
         "note_he": "צימר זוגי עם ג'קוזי ומרפסת נוף. הסימון על היישוב שילה, לא על הצימר עצמו. "
                    + FROM_BUSINESS,
     },
+    {
+        "source_key": "reported:bat-hen-sarig-beit-el",
+        # Google's listing name, which carries a U+202D override at the end
+        # that is invisible and must not be stored. Written out here without
+        # it, which is the same thing gmaps.ts strips on the /add path.
+        "name_he": "בת-חן שריג",
+        "city": "בית אל",
+        # Google has the street and number; the message had the landmark. Both
+        # are worth keeping -- "מול הבריכה" is how anyone there gives the
+        # directions, and the industrial estate has no signage to speak of.
+        "address_he": "דרך האופה 2, אזור תעשייה ב' (מול הבריכה)",
+        # Two numbers came in. telHref() strips non-digits, so a field holding
+        # both dials neither; the shop's landline goes here and the mobile the
+        # site itself advertises goes on the online row below.
+        "phone": "02-5811443",
+        # Clothing rather than jewelry: the shop leads with modest fashion in
+        # its own description and in the message, and the jewellery is in the
+        # note where a search for it will still find the row.
+        "category": "clothing",
+        "fighter": True,
+        "voucher": False,
+        # Read off the address bar after Google Maps resolved the share link,
+        # which is what the form tells a contributor to do when a link carries
+        # no position. The short link expands to a place URL with an ftid and
+        # no coordinates at all -- see the note on the online row.
+        "lat": 31.9432512,
+        "lng": 35.2266116,
+        "provider_ref": "gmaps:ftid/0x151cd5dc34e77f19:0xdce7412e48f98e4d",
+        "note_he": "אופנה צנועה לנשים ונערות, תכשיטי כסף וגולדפילד, כיסויי ראש, "
+                   "מתנות וניקוב אוזניים. " + FROM_BUSINESS,
+    },
+    {
+        # The same business, second row on purpose. The web shop takes the card
+        # from anywhere in the country, which the pin in Beit El cannot say,
+        # and the schema forbids one row from being both: places_location_shape
+        # requires an online row to carry no point.
+        "source_key": "online:bat-hen-sarig",
+        "name_he": "בת-חן שריג · חנות אונליין",
+        "city": None,
+        "address_he": None,
+        "phone": "058-5811442",
+        "category": "clothing",
+        "fighter": True,
+        "voucher": False,
+        "lat": None,
+        "lng": None,
+        # Null, and not the shop's ftid. That id means "the door in Beit El",
+        # and giving it to the web shop too would make a later /add of the
+        # physical shop merge into the online row and lose the pin.
+        "provider_ref": None,
+        "is_online": True,
+        "url": "https://bsarig.com",
+        "note_he": "חנות אונליין של בת-חן שריג, משלוחים לכל הארץ. "
+                   "האתר מציין שניתן לשלם בכרטיס פייטר. " + FROM_BUSINESS,
+    },
 ]
 
 # A reservist who paid there.
@@ -148,6 +208,24 @@ WITNESSED = [
         "note_he": FROM_RESERVIST,
     },
     {
+        "source_key": "reported:beit-hapargit-tzfat",
+        # Google's own listing name. The message said just "בית הפרגית", which
+        # word_similarity scores 1.000 against this, so a later submission
+        # under either spelling still merges onto this row.
+        "name_he": "בית הפרגית צפת",
+        "city": "צפת",
+        # The message gave the street without a number; Google has 98.
+        "address_he": "ירושלים 98",
+        "phone": "04-6668799",
+        "category": "restaurant",
+        "fighter": True,
+        "voucher": False,
+        "lat": 32.9665222,
+        "lng": 35.4960551,
+        "provider_ref": "gmaps:ftid/0x151c23beb06bfac3:0xa4e5c9253df28369",
+        "note_he": FROM_RESERVIST,
+    },
+    {
         "source_key": "reported:oshika-maale-adumim",
         "name_he": "אושיקה מעלה אדומים",
         "city": "מעלה אדומים",
@@ -176,6 +254,12 @@ BOUNDS = (29.4, 33.4, 34.2, 35.9)
 
 def row_for(place: dict, now: str) -> dict:
     located = place["lat"] is not None and place["lng"] is not None
+    online = place.get("is_online", False)
+    # An online shop has nowhere to be pinned, so "no pin" is not a gap for a
+    # moderator to fill and it must not go into the review queue. A physical
+    # place without coordinates is the opposite: that is exactly what the queue
+    # is for.
+    publishable = located or online
     return {
         "source_key": place["source_key"],
         # Google's own id where the business has a listing, which is what lets
@@ -187,7 +271,8 @@ def row_for(place: dict, now: str) -> dict:
         "name_he": place["name_he"],
         "category": place["category"],
         "is_chain": False,
-        "is_online": False,
+        "is_online": online,
+        "url": place.get("url"),
         "location": (
             "SRID=4326;POINT(%s %s)" % (place["lng"], place["lat"]) if located else None
         ),
@@ -198,8 +283,8 @@ def row_for(place: dict, now: str) -> dict:
         "benefit_vacation_voucher": place["voucher"],
         "note_he": place["note_he"],
         "source": "user_submission",
-        "status": "published" if located else "pending",
-        "review_reason": None if located else "no_osm_match",
+        "status": "published" if publishable else "pending",
+        "review_reason": None if publishable else "no_osm_match",
         "first_reported_at": now,
     }
 
@@ -215,27 +300,40 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    everything = SELF_REPORTED + WITNESSED
+
+    seen = set()
+    for place in everything:
+        if place["source_key"] in seen:
+            sys.exit("duplicate source_key: %s" % place["source_key"])
+        seen.add(place["source_key"])
+
     lat_lo, lat_hi, lng_lo, lng_hi = BOUNDS
-    for place in SELF_REPORTED + WITNESSED:
+    for place in everything:
+        # places_location_shape rejects an online row carrying a point, and it
+        # would be rejected as a batch, taking the good rows down with it.
+        if place.get("is_online") and place["lat"] is not None:
+            sys.exit("%s is online and cannot carry a pin" % place["source_key"])
+        if len(place["note_he"]) > 200:
+            sys.exit("%s note is %d chars, limit is 200" % (place["source_key"], len(place["note_he"])))
         if place["lat"] is None:
             continue
         if not (lat_lo <= place["lat"] <= lat_hi and lng_lo <= place["lng"] <= lng_hi):
             sys.exit("%s is outside Israel: %s" % (place["source_key"], place))
-        if len(place["note_he"]) > 200:
-            sys.exit("%s note is %d chars, limit is 200" % (place["source_key"], len(place["note_he"])))
 
     now = datetime.now(timezone.utc).isoformat()
-    rows = [row_for(p, now) for p in SELF_REPORTED + WITNESSED]
+    rows = [row_for(p, now) for p in everything]
     witnessed_keys = {p["source_key"] for p in WITNESSED}
 
     located = [r for r in rows if r["location"]]
-    queued = [r for r in rows if not r["location"]]
-    print("%d places: %d pinned, %d waiting in /admin for a pin"
-          % (len(rows), len(located), len(queued)))
+    queued = [r for r in rows if r["status"] == "pending"]
+    online = [r for r in rows if r["is_online"]]
+    print("%d places: %d pinned, %d online, %d waiting in /admin for a pin"
+          % (len(rows), len(located), len(online), len(queued)))
     for row in rows:
+        kind = "witness" if row["source_key"] in witnessed_keys else "business"
         print("  %-44s %-14s %-11s %s"
-              % (row["source_key"], row["city"], row["status"],
-                 "witness" if row["source_key"] in witnessed_keys else "business"))
+              % (row["source_key"], row["city"] or "-", row["status"], kind))
 
     if queued:
         print("\n%d still without a pin. A Google Maps link resolves one in a paste," % len(queued))
