@@ -79,7 +79,7 @@ function SiteHeader() {
         className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4"
         style={{ height: "var(--header-h)" }}
       >
-        <Link href="/" className="tap flex items-center gap-2.5">
+        <Link href="/map" className="tap flex items-center gap-2.5">
           <span aria-hidden="true" className="brandmark">
             <span />
             <span />
@@ -126,7 +126,7 @@ function SiteFooter() {
         </p>
         <p className="mt-2 text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
           לא קשור למשרד הביטחון, לפייטר או למנפיק הכרטיס.{" "}
-          <Link href="/about" className="underline">
+          <Link href="/" className="underline">
             על המפה
           </Link>
           {" · "}

@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     return jsonError("השליחה נכשלה. נסו שוב בעוד רגע", 500);
   }
 
+  revalidatePath("/map");
   revalidatePath("/");
   revalidatePath(`/place/${input.placeId}`);
   return Response.json({ ok: true });

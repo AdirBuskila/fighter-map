@@ -10,6 +10,14 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/opengraph-image": ["./src/app/_fonts/**"],
   },
+  async redirects() {
+    return [
+      // /about was the landing page for one deploy before it moved to the
+      // root. The URL was live and shareable in that window, so it keeps
+      // working rather than turning into a 404 for anyone who kept it.
+      { source: "/about", destination: "/", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

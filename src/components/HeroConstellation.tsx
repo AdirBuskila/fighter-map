@@ -113,7 +113,7 @@ export default function HeroConstellation({ places, publishedTotal }: Props) {
           הבטחות.
         </p>
         <div className="hero-const__cta">
-          <Link className="btn btn-primary tap px-5" href="/">
+          <Link className="btn btn-primary tap px-5" href="/map">
             פתחו את המפה
           </Link>
           <Link className="btn tap px-5" href="/add">

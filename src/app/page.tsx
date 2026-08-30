@@ -1,60 +1,70 @@
-import Explorer from "@/components/Explorer";
-import { fetchMappedPlaces, fetchUnmappedPlaces } from "@/lib/places";
-import { supabaseConfigured } from "@/lib/supabase";
+import type { Metadata } from "next";
+import Link from "next/link";
+import HeroConstellation from "@/components/HeroConstellation";
+import { countPublishedPlaces, fetchMappedPlaces } from "@/lib/places";
 
-// The dataset changes only when someone reports, so a short revalidation window
-// keeps the first paint cheap without letting the map go stale for long.
+/**
+ * The front door.
+ *
+ * The map used to live here and now lives at /map. That is a deliberate
+ * trade: a first-time reader arriving from a WhatsApp message used to land in
+ * the middle of a working interface and have to infer what the site was and
+ * why to believe it, and now they land on something that says so in one
+ * screen and hands them a button.
+ *
+ * The cost is a tap for everyone who already knows what this is, which is why
+ * the masthead brand goes to /map rather than back here: the splash is an
+ * entrance, not somewhere to be sent repeatedly.
+ */
+
+// The same window the map and the place pages use. There is no reason for the
+// landing page to be fresher or staler than the map it advertises.
 export const revalidate = 120;
 
+// No `title` on purpose: the root page takes the layout's default rather
+// than pushing itself through the "%s · מפת הטבות פייטר" template and
+// saying the name twice.
+export const metadata: Metadata = {
+  description:
+    "מפה קהילתית של מקומות שבהם כרטיס פייטר ושובר החופשה עבדו, לפי דיווחים של מילואימניקים.",
+};
+
 export default async function HomePage() {
-  const [mapped, unmapped] = await Promise.all([
+  // Both counts come from the database on every revalidation rather than being
+  // written down here. The corpus went from 935 rows to over a thousand while
+  // this page was being designed; a hardcoded number was already wrong once.
+  const [places, publishedTotal] = await Promise.all([
     fetchMappedPlaces(),
-    fetchUnmappedPlaces(),
+    countPublishedPlaces(),
   ]);
 
-  const empty = mapped.length === 0 && unmapped.length === 0;
-  if (!supabaseConfigured && empty) return <NotConfigured />;
-  if (empty) return <NoData />;
-
-  return <Explorer mapped={mapped} unmapped={unmapped} />;
-}
-
-function NotConfigured() {
   return (
-    <Shell title="בסיס הנתונים לא מחובר">
-      <p>
-        חסרים NEXT_PUBLIC_SUPABASE_URL ו NEXT_PUBLIC_SUPABASE_ANON_KEY בקובץ
-        env.local. העתיקו אותם מלוח הבקרה של Supabase והריצו מחדש את npm run dev.
-      </p>
-    </Shell>
-  );
-}
+    <main className="mx-auto w-full max-w-6xl px-4 pb-16">
+      <HeroConstellation places={places} publishedTotal={publishedTotal} />
 
-function NoData() {
-  return (
-    <Shell title="אין עדיין מקומות במפה">
-      <p>
-        הטבלה ריקה. הריצו את scripts/05_seed_supabase.py כדי לטעון את הנתונים
-        מהקובץ, או הוסיפו מקום ראשון דרך הוספת מקום.
-      </p>
-    </Shell>
-  );
-}
+      <section className="hero-const__prose">
+        <h2>מה זה המקום הזה</h2>
+        <p>
+          זו מפה קהילתית, לא רשמית. כל מקום שמופיע כאן הגיע מדיווח של מישהו
+          ששילם שם בכרטיס פייטר או מימש שובר חופשה, ולא מרשימה של מפעיל הכרטיס.
+          אין לנו קשר למשרד הביטחון, לפייטר או למנפיק הכרטיס.
+        </p>
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 items-center px-4 py-16">
-      <div>
-        <h1 className="font-extrabold" style={{ fontSize: "var(--text-2xl)" }}>
-          {title}
-        </h1>
-        <div
-          className="mt-3 text-ink-soft"
-          style={{ fontSize: "var(--text-base)" }}
-        >
-          {children}
-        </div>
-      </div>
-    </div>
+        <h2>למה חלק מהמקומות בלי סימון על המפה</h2>
+        <p>
+          המפה יודעת להראות רק מקומות שיש להם נקודה מדויקת, ולעסקים קטנים בישראל
+          פשוט אין רישום במאגרים הפתוחים שאנחנו משתמשים בהם. במקום להמציא נקודה
+          ולשלוח אתכם לבניין הלא נכון, המקומות האלה מופיעים ברשימה, והכפתור
+          בעמוד שלהם פותח חיפוש בגוגל מפות לפי השם והעיר.
+        </p>
+
+        <h2>איך מוסיפים מקום</h2>
+        <p>
+          דרך <Link href="/add">הוספת מקום</Link>. אם החיפוש לא מוצא את בית העסק, אפשר
+          להדביק קישור מגוגל מפות והמיקום ייקבע ממנו. מקום חדש מתפרסם מיד, ומסומן
+          כדיווח יחיד עד שעוד מישהו מאשר אותו.
+        </p>
+      </section>
+    </main>
   );
 }

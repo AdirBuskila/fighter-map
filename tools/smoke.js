@@ -48,7 +48,8 @@ function check(label, actual, expected) {
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message.slice(0, 200)));
 
   console.log("smoke test against %s\n", target);
-  await page.goto(target, { waitUntil: "domcontentloaded", timeout: 60000 });
+  // The map lives at /map since the landing page took the root.
+  await page.goto(`${target}/map`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(11000);
 
   const dom = await page.evaluate(() => {
@@ -160,8 +161,8 @@ function check(label, actual, expected) {
   // the document. A mismatch against the API means the projection dropped
   // points, which is exactly the failure that looks fine on screen -- a
   // constellation with holes in it still looks like a constellation.
-  console.log("\nlanding page");
-  await page.goto(`${target}/about`, { waitUntil: "networkidle" });
+  console.log("\nlanding page (the root)");
+  await page.goto(target, { waitUntil: "networkidle" });
 
   const hero = await page.evaluate(() => {
     const dots = document.querySelectorAll(".hero-const__dot");

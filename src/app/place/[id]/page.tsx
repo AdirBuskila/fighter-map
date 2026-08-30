@@ -45,7 +45,7 @@ export default async function PlacePage({ params }: Params) {
   return (
     <article className="mx-auto w-full max-w-2xl flex-1 px-3 py-4">
       <Link
-        href="/"
+        href="/map"
         className="tap inline-flex items-center text-ink-soft"
         style={{ fontSize: "var(--text-sm)" }}
       >

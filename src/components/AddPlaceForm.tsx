@@ -119,7 +119,7 @@ function Form() {
           <button
             type="button"
             className="btn btn-primary px-4"
-            onClick={() => router.push(done.placeId ? `/place/${done.placeId}` : "/")}
+            onClick={() => router.push(done.placeId ? `/place/${done.placeId}` : "/map")}
           >
             {added ? "הצגת המקום" : "מעבר למקום"}
           </button>

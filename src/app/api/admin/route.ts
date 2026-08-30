@@ -149,6 +149,7 @@ export async function POST(request: Request) {
     return jsonError("העדכון נכשל. נסו שוב בעוד רגע", 500);
   }
 
+  revalidatePath("/map");
   revalidatePath("/");
   revalidatePath(`/place/${placeId}`);
   return Response.json({ ok: true });

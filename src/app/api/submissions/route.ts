@@ -70,6 +70,7 @@ async function confirmExisting(
     return jsonError("השליחה נכשלה. נסו שוב בעוד רגע", 500);
   }
 
+  revalidatePath("/map");
   revalidatePath("/");
   revalidatePath(`/place/${place.id}`);
   return Response.json({
@@ -195,6 +196,7 @@ export async function POST(request: Request) {
   });
   if (reportError) console.error("submission report failed", reportError.message);
 
+  revalidatePath("/map");
   revalidatePath("/");
   revalidatePath(`/place/${created.id}`);
   return Response.json({ ok: true, placeId: created.id, outcome: "published" });
