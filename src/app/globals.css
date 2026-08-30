@@ -671,3 +671,204 @@ label.tap {
     --map-ctrl-filter: invert(1);
   }
 }
+
+/* ===========================================================================
+   The landing-page hero: the country drawn by its own pins.
+
+   All of this is static markup animated by CSS. There is no client component
+   behind it, no canvas and no WebGL, which is deliberate -- the three worst
+   bugs this project has had were all in a rendering surface that reported
+   success and drew nothing. A hero made of <path> and <circle> has no runtime
+   to fail in.
+
+   Colour comes entirely from the tokens above, so light and dark follow for
+   free and check_palette.py has nothing new to check.
+   =========================================================================== */
+
+.hero-const {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: min(78vh, 620px);
+  margin-block: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+/* Height drives the map and the aspect ratio supplies the width, so the whole
+   country is always visible. Sizing it by width instead crops the Negev on a
+   narrow screen, which is where a third of the dots are. */
+.hero-const__map {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 6%;
+  transform: translateY(-50%);
+  block-size: 88%;
+  aspect-ratio: 294.62534 / 792.60406;
+}
+.hero-const__map svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Land is --surface and sea is --bg, in that order, because the relationship
+   has to survive both themes. --surface-sunk is *darker* than --bg in dark
+   mode, which sinks the country into the page and leaves only a hairline. */
+.hero-const__land {
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+}
+
+.hero-const__dot {
+  opacity: 0;
+  animation: hero-dot-in 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.hero-const__dot--fighter { fill: var(--fighter); }
+.hero-const__dot--voucher { fill: var(--voucher); }
+
+@keyframes hero-dot-in {
+  from { opacity: 0; transform: scale(0); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* A voucher dot is a rotated square, so it already carries a transform. Giving
+   it the scaling keyframes would overwrite that and land it on its side. */
+.hero-const__dot--voucher { animation-name: hero-dot-fade; }
+@keyframes hero-dot-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.hero-const__copy {
+  position: relative;
+  z-index: 2;
+  max-inline-size: 52%;
+  padding-inline-start: clamp(1.5rem, 4vw, 3.5rem);
+}
+.hero-const__kicker {
+  margin: 0 0 1rem;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--ink-faint);
+}
+.hero-const__headline {
+  margin: 0;
+  font-size: clamp(2rem, 5.2vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.hero-const__headline em {
+  font-style: normal;
+  color: var(--fighter);
+}
+.hero-const__sub {
+  margin: 1.15rem 0 0;
+  max-inline-size: 32ch;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.hero-const__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.6rem;
+}
+
+.hero-const__stats {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: clamp(1.5rem, 4vw, 3.5rem);
+  inset-block-end: 1.9rem;
+  display: flex;
+  gap: 1.9rem;
+  margin: 0;
+}
+.hero-const__stats dt {
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+.hero-const__stats dd {
+  margin: 0.15rem 0 0;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.hero-const__key {
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-end: 0.4rem;
+}
+.hero-const__key--fighter { border-radius: 50%; background: var(--fighter); }
+.hero-const__key--voucher { background: var(--voucher); transform: rotate(45deg); }
+
+.hero-const__prose {
+  max-inline-size: 62ch;
+  margin-inline: auto;
+  color: var(--ink-soft);
+}
+.hero-const__prose h2 {
+  margin: 2rem 0 0.5rem;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--ink);
+}
+.hero-const__prose p { margin: 0; line-height: 1.65; }
+.hero-const__prose a { color: var(--fighter); text-decoration: underline; }
+
+/* Israel is tall and narrow and so is a phone, so stacking lets the map stay
+   the largest thing on the screen instead of fighting the text for width. */
+@media (max-width: 860px) {
+  .hero-const {
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+    padding-block: 2rem 1.5rem;
+  }
+  /* Headline first. Sized by width the map is 800px tall on a phone, which
+     puts every word of the page below the fold and leaves a first-time reader
+     looking at an unexplained shape. */
+  .hero-const__copy {
+    order: -1;
+    max-inline-size: none;
+    padding-inline: 1.5rem;
+  }
+  .hero-const__map {
+    position: relative;
+    inset: auto;
+    transform: none;
+    block-size: min(46vh, 380px);
+    inline-size: auto;
+    margin: 1.5rem auto 0;
+  }
+  .hero-const__stats {
+    position: relative;
+    inset: auto;
+    margin: 1.5rem 1.5rem 0;
+    gap: 1.4rem;
+  }
+  /* Scaling a few hundred SVG nodes makes a phone re-rasterise geometry every
+     frame. Opacity is a paint-only change, and the wave still reads, because
+     the stagger is what carries it rather than the pop. */
+  .hero-const__dot { animation-name: hero-dot-fade; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-const__dot {
+    animation: none;
+    opacity: 1;
+  }
+}

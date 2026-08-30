@@ -96,6 +96,30 @@ export async function fetchUnmappedPlaces(): Promise<Place[]> {
   })) as Place[];
 }
 
+/**
+ * How many places the site actually lists.
+ *
+ * fetchMappedPlaces() cannot answer this: it returns only rows with
+ * coordinates, and since 0006 most published places have none. The landing
+ * page shows both numbers side by side, so it needs this one counted rather
+ * than inferred, and a head request is the cheapest way to get it.
+ */
+export async function countPublishedPlaces(): Promise<number> {
+  if (!supabaseConfigured) {
+    return (await localSeed()).length;
+  }
+  const { count, error } = await serverClient()
+    .from("places")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "published");
+
+  if (error) {
+    console.error("published count failed", error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function fetchPlace(id: string): Promise<Place | null> {
   if (!supabaseConfigured) {
     return (await localSeed()).find((p) => p.id === id) ?? null;

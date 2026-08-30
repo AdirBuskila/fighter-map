@@ -153,6 +153,58 @@ function check(label, actual, expected) {
   check("no console errors", errors.length, 0);
   errors.slice(0, 5).forEach((e) => console.log("      " + e));
 
+  // ---------------------------------------------------------------- /about
+  //
+  // The hero is static SVG from a server component, so "did it render" is a
+  // real question with a countable answer: every pinned place is one node in
+  // the document. A mismatch against the API means the projection dropped
+  // points, which is exactly the failure that looks fine on screen -- a
+  // constellation with holes in it still looks like a constellation.
+  console.log("\nlanding page");
+  await page.goto(`${target}/about`, { waitUntil: "networkidle" });
+
+  const hero = await page.evaluate(() => {
+    const dots = document.querySelectorAll(".hero-const__dot");
+    const stats = [...document.querySelectorAll(".hero-const__stats dd")].map(
+      (d) => Number(d.textContent.replace(/[^\d]/g, "")),
+    );
+    return {
+      land: document.querySelectorAll(".hero-const__land").length,
+      dots: dots.length,
+      staggered: new Set([...dots].map((d) => d.style.animationDelay)).size,
+      headline: (document.querySelector(".hero-const__headline")?.textContent || "").trim(),
+      stats,
+      canvases: document.querySelectorAll("canvas").length,
+      scripts: document.querySelectorAll("script[src]").length,
+    };
+  });
+  // An independent count to compare against, so "the dots rendered" is not
+  // checked against the same array that produced them. places_near caps its
+  // radius at 200km and the country is longer than that, so this unions two
+  // calls -- north and south -- and dedupes. It is a lower bound, which is
+  // all that is needed: the failure being guarded against is the projection
+  // silently dropping points, and a constellation with holes still looks like
+  // a constellation.
+  const known = await page.evaluate(async () => {
+    const ids = new Set();
+    for (const [lat, lng] of [[32.8, 35.2], [30.6, 34.9]]) {
+      const url = `/api/places/near?lat=${lat}&lng=${lng}&radius=200000&limit=5000`;
+      const body = await fetch(url).then((r) => (r.ok ? r.json() : { places: [] }));
+      for (const p of body.places ?? []) ids.add(p.id);
+    }
+    return ids.size;
+  });
+
+  check("the whole country is drawn", hero.land, 8);
+  check("every pinned place is a dot", hero.dots, (n) => n > 100);
+  check("the wave is staggered, not one flash", hero.staggered, (n) => n > 50);
+  check("the headline is there", hero.headline.length, (n) => n > 0);
+  check("the counts are real numbers", hero.stats.length === 3 && hero.stats.every((n) => n > 0), true);
+  check("the listed total is the largest of them", hero.stats[0], Math.max(...hero.stats));
+  // The whole point of a server-rendered hero: nothing to go wrong at runtime.
+  check("no canvas on the landing page", hero.canvases, 0);
+  check("no pinned place was dropped in projection", hero.dots >= known, true);
+
   if (shot) {
     await page.screenshot({ path: shot });
     console.log("\nscreenshot -> %s", shot);

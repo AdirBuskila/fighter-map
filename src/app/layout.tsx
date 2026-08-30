@@ -126,6 +126,10 @@ function SiteFooter() {
         </p>
         <p className="mt-2 text-ink-faint" style={{ fontSize: "var(--text-2xs)" }}>
           לא קשור למשרד הביטחון, לפייטר או למנפיק הכרטיס.{" "}
+          <Link href="/about" className="underline">
+            על המפה
+          </Link>
+          {" · "}
           <Link href="/admin" className="underline">
             ניהול
           </Link>

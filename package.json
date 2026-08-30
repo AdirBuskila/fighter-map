@@ -11,7 +11,8 @@
     "check": "tsc --noEmit && eslint src --max-warnings=0",
     "smoke": "node tools/smoke.js",
     "gmaps": "node --experimental-strip-types tools/gmaps_cases.mjs",
-    "urls": "node --experimental-strip-types tools/place_urls.mjs"
+    "urls": "node --experimental-strip-types tools/place_urls.mjs",
+    "outline": "node --experimental-strip-types tools/outline_cases.mjs"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-rtl-text": "^0.4.0",
