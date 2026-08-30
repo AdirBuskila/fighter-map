@@ -100,6 +100,14 @@ export async function POST(request: Request) {
       city: spot.city ?? null,
       status: "published",
       review_reason: null,
+      // A moderator searched a provider and picked the business, so this is a
+      // doorway. Most rows arrive here already carrying a town pin from
+      // 10_pin_by_town.py, and without these two the row would keep saying it
+      // was approximate: still faded on the map, still refused by the
+      // navigation links, after a person had just done the work of locating
+      // it exactly.
+      location_precision: "exact",
+      pin_unavailable: false,
     };
   } else if (input.action === "restore") {
     // Retire the failure reports that caused the flip. Without this the next
