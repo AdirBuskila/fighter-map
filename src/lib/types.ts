@@ -32,6 +32,9 @@ export type Category =
   | "gov_service"
   | "other";
 
+/** Whether a place's point is its doorway or just its town. */
+export type LocationPrecision = "exact" | "town";
+
 /** One row as `places_near` and `places_all` return it. */
 export type Place = {
   id: string;
@@ -44,6 +47,17 @@ export type Place = {
   is_online: boolean;
   lat: number | null;
   lng: number | null;
+  /**
+   * How much the point above is worth.
+   *
+   * "exact" means it is the doorway. "town" means it is the middle of the
+   * settlement and the business is somewhere in it -- true of most of the
+   * imported corpus, because OpenStreetMap has never heard of small Israeli
+   * businesses even though it knows every town. A "town" pin must never be
+   * rendered as though it were a doorway; that is the whole reason this is
+   * carried through the RPCs rather than inferred.
+   */
+  location_precision: LocationPrecision;
   address_he: string | null;
   city: string | null;
   phone: string | null;

@@ -374,6 +374,12 @@ function installLayers(map: MlMap): void {
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
       },
+      // A town pin is faded rather than recoloured or reshaped. Both of those
+      // are already saying something here -- colour is the benefit, hollow is
+      // a single report -- and a third meaning loaded onto either would break
+      // a vocabulary that was chosen to survive colour blindness. Faded reads
+      // as "less certain" without being confusable with any of it.
+      paint: { "icon-opacity": ["case", ["get", "approx"], 0.45, 1] },
     });
     map.addLayer({
       id: "pin-selected",
@@ -420,7 +426,15 @@ function paint(map: MlMap, places: Place[], branches: EphemeralBranch[]): void {
       .map((p) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [p.lng!, p.lat!] },
-        properties: { id: p.id, icon: iconFor(p), name: p.name_he },
+        properties: {
+          id: p.id,
+          icon: iconFor(p),
+          name: p.name_he,
+          // Most of the corpus is pinned at its town rather than its doorway,
+          // because OSM has never heard of the business. Those dots must not
+          // look like the ones we actually located.
+          approx: p.location_precision === "town",
+        },
       })),
   });
 

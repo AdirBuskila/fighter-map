@@ -82,8 +82,8 @@ export function isFresh(place: Place): boolean {
 }
 
 export function wazeUrl(place: Place): string {
-  if (place.lat != null && place.lng != null) {
-    return `https://waze.com/ul?ll=${place.lat},${place.lng}&navigate=yes`;
+  if (hasUsablePoint(place)) {
+    return `https://waze.com/ul?ll=${place.lat!},${place.lng!}&navigate=yes`;
   }
   return `https://waze.com/ul?q=${encodeURIComponent(searchTerms(place))}`;
 }
@@ -118,12 +118,28 @@ function searchTerms(place: Place): string {
   return parts.join(" ");
 }
 
+/**
+ * Whether a place's point is good enough to send somebody to.
+ *
+ * A 'town' pin is the middle of the settlement, not the shop. It is worth
+ * drawing on a map, where it says "there is something here"; it is worth
+ * nothing to a navigation app, which would cheerfully drive the reader to the
+ * centre of Eilat and announce that they had arrived. So for links, a town
+ * pin counts as no pin at all, and the search by name and town -- the thing
+ * that actually finds the door -- is used instead.
+ */
+function hasUsablePoint(place: Place): boolean {
+  return (
+    place.lat != null && place.lng != null && place.location_precision !== "town"
+  );
+}
+
 export function googleMapsUrl(place: Place): string {
-  if (place.lat != null && place.lng != null) {
+  if (hasUsablePoint(place)) {
     // One `query`, not two. This used to append `&query=<name>` after the
     // coordinates; Google keeps the last of a repeated parameter, so every
     // pinned place opened as a name search and threw its own point away.
-    return `https://www.google.com/maps/search/?api=1&query=${place.lat}%2C${place.lng}`;
+    return `https://www.google.com/maps/search/?api=1&query=${place.lat!}%2C${place.lng!}`;
   }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTerms(place))}`;
 }

@@ -26,6 +26,9 @@ async function localSeed(): Promise<Place[]> {
       ...(row as object),
       id: (row.provider_ref as string) ?? `local-${index}`,
       status: "published",
+      // The disk fallback is the importer's own output, which only ever
+      // held doorway coordinates.
+      location_precision: "exact" as const,
       // data/places.json is the importer's output, so every row here is one.
       source: "pdf_import",
       confirm_count: 0,

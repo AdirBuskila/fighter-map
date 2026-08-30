@@ -22,7 +22,8 @@ import { googleMapsUrl, wazeUrl } from "../src/lib/format.ts";
 
 const BASE = {
   id: "x", provider_ref: null, name_he: "", name_en: null, category: "other",
-  is_chain: false, is_online: false, lat: null, lng: null, address_he: null,
+  is_chain: false, is_online: false, lat: null, lng: null,
+  location_precision: "exact", address_he: null,
   city: null, phone: null, url: null, benefit_fighter_card: true,
   benefit_vacation_voucher: false, note_he: null, source: "pdf_import",
   status: "published", confirm_count: 0, report_count: 0,
@@ -93,6 +94,15 @@ check(
   "https://www.google.com/maps/search/?api=1&query=תמנון",
 );
 
+// A town pin is a point, but not one worth navigating to: it is the middle
+// of the settlement. Sending somebody there is worse than sending them to a
+// search, because the map app announces they have arrived in the wrong place.
+check(
+  "a town pin is not treated as a location",
+  decodeURIComponent(googleMapsUrl(place({ name_he: "קמיליון", city: "תל אביב", lat: 32.0853, lng: 34.7818, location_precision: "town" }))),
+  "https://www.google.com/maps/search/?api=1&query=קמיליון תל אביב",
+);
+
 console.log("\nwaze");
 
 check(
@@ -104,6 +114,12 @@ check(
 check(
   "without a pin it searches the same terms Google gets",
   decodeURIComponent(wazeUrl(place({ name_he: "קמיליון", city: "תל אביב" }))),
+  "https://waze.com/ul?q=קמיליון תל אביב",
+);
+
+check(
+  "and waze searches for it rather than driving to the town centre",
+  decodeURIComponent(wazeUrl(place({ name_he: "קמיליון", city: "תל אביב", lat: 32.0853, lng: 34.7818, location_precision: "town" }))),
   "https://waze.com/ul?q=קמיליון תל אביב",
 );
 

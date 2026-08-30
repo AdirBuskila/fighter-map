@@ -40,7 +40,11 @@ export default async function PlacePage({ params }: Params) {
   if (!place) notFound();
 
   const confirmed = formatDate(lastSignal(place));
-  const hasPin = place.lat != null && place.lng != null;
+  // Three states, not two. A place can have no point, a point that is only
+  // its town, or a point that is its doorway -- and the middle one must not
+  // be offered as somewhere to navigate to.
+  const townPin = place.lat != null && place.location_precision === "town";
+  const hasPin = place.lat != null && place.lng != null && !townPin;
 
   return (
     <article className="mx-auto w-full max-w-2xl flex-1 px-3 py-4">
@@ -156,7 +160,16 @@ export default async function PlacePage({ params }: Params) {
         )}
       </nav>
 
-      {!hasPin && !place.is_chain && !place.is_online && (
+      {townPin && (
+        <p className="mt-6 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
+          הנקודה על המפה היא מרכז היישוב, לא הכתובת של בית העסק — לא הצלחנו
+          לאתר אותה. הכפתור למעלה פותח חיפוש בגוגל מפות לפי השם והעיר, וזה מה
+          שימצא את הדלת. אם אתם יודעים איפה זה בדיוק, אפשר להוסיף אותו עם קישור
+          מגוגל מפות ולסמן אותו במדויק לכולם.
+        </p>
+      )}
+
+      {!hasPin && !townPin && !place.is_chain && !place.is_online && (
         <p className="mt-6 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
           את המקום הזה לא הצלחנו לסמן על המפה, אז הכפתור למעלה פותח חיפוש בגוגל
           מפות לפי השם והעיר. אם מצאתם אותו, אפשר להוסיף אותו עם קישור מגוגל
