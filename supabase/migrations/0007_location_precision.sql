@@ -31,6 +31,23 @@
 -- Place type goes to 24 fields and scripts/check_migration.py holds the three
 -- functions to the same shape.
 
+-- WHY THESE FUNCTIONS ARE DROPPED AND NOT JUST REPLACED.
+--
+-- CREATE OR REPLACE FUNCTION cannot change a function's return type, and a
+-- RETURNS TABLE list *is* its return type, so adding a column to it fails
+-- with:
+--
+--   42P13: cannot change return type of existing function
+--   DETAIL: Row type defined by OUT parameters is different.
+--
+-- Hence an explicit DROP against the exact argument signature. That in turn
+-- has a consequence worth stating, because it is the kind of thing that takes
+-- a site down quietly: DROP FUNCTION discards the function's grants. 0001
+-- gives anon EXECUTE on all three, and anon is the role the public site reads
+-- with, so every one of them is re-granted at the bottom of this file. A drop
+-- without those three lines would leave the map returning "permission denied"
+-- for everybody who is not logged in.
+
 alter table places
   add column if not exists location_precision text not null default 'exact';
 
@@ -50,6 +67,8 @@ comment on column places.location_precision is
 create index if not exists places_precision_idx
   on places (location_precision)
   where location is not null;
+
+drop function if exists places_near(double precision, double precision, integer, text, text[], integer);
 
 create or replace function places_near(
   p_lat        double precision,
@@ -125,6 +144,8 @@ as $$
    limit p_limit;
 $$;
 
+drop function if exists places_all(text, text[], integer);
+
 create or replace function places_all(
   p_benefit    text   default null,
   p_categories text[] default null,
@@ -180,6 +201,8 @@ as $$
    limit p_limit;
 $$;
 
+drop function if exists place_by_id(uuid);
+
 create or replace function place_by_id(p_id uuid)
 returns table (
   id                       uuid,
@@ -224,3 +247,9 @@ as $$
    where p.id = p_id
      and p.status in ('published', 'reported_not_working');
 $$;
+
+-- Restoring what the DROPs above took away. Not optional; see the note at the
+-- top. 0002 and 0004 repeat these for the same reason.
+grant execute on function places_near  to anon, authenticated, service_role;
+grant execute on function places_all   to anon, authenticated, service_role;
+grant execute on function place_by_id  to anon, authenticated, service_role;
