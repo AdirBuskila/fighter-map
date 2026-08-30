@@ -1,0 +1,146 @@
+[
+ {
+  "id": "c22b065e-ae3d-4d61-aa08-3f45c4ac89a5",
+  "name_he": "מלון איילה",
+  "city": "איילת השחר",
+  "lat": 33.02352,
+  "lng": 35.57438,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון איילה ריזורט בטבע איילת השחר', 0.4km from Ayelet HaShahar centroid; exact distinctive name + exact settlement"
+ },
+ {
+  "id": "3f4aeab0-8bb2-4614-b08c-4fef3469750b",
+  "name_he": "מלון פרא",
+  "city": "רמת הגולן",
+  "lat": 33.01257,
+  "lng": 35.65155,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - פרא שעל'; Pereh hotel is in Sha'al, which is in the Golan Heights (the record's city is the region 'רמת הגולן')"
+ },
+ {
+  "id": "a60586e0-ced8-44d6-950c-43a013aa4480",
+  "name_he": "ווסט לגון",
+  "city": "נתניה",
+  "lat": 32.30505,
+  "lng": 34.84417,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - ווסט לגון ריזורט נתניה', 1.5km from Netanya centroid; exact name + exact city"
+ },
+ {
+  "id": "aad1259f-070f-4887-9120-1b4d261d32cd",
+  "name_he": "מלון רות",
+  "city": "צפת",
+  "lat": 32.96393,
+  "lng": 35.49407,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - רות רימונים צפת', 1.4km from Safed centroid; Ruth Rimonim Safed is the only 'Ruth' hotel in Safed"
+ },
+ {
+  "id": "eac4e334-ea24-4eab-bc9e-c0f8f484fda6",
+  "name_he": "מלון גלי כנרת",
+  "city": "טבריה",
+  "lat": 32.7834,
+  "lng": 35.54379,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - רימונים גלי כנרת טבריה', 1.9km from Tiberias centroid; exact name + exact city"
+ },
+ {
+  "id": "f5ac486c-9cda-4a07-9ffc-85c4d60e07c7",
+  "name_he": "מלון ענבל",
+  "city": "ירושלים",
+  "lat": 31.77055,
+  "lng": 35.22189,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - מלון ענבל ירושלים', 1.4km from Jerusalem centroid; exact name + exact city"
+ },
+ {
+  "id": "e55698f8-810f-4443-a41c-dc055c907997",
+  "name_he": "מלון לאונרדו רויאל ריזורט",
+  "city": "אילת",
+  "lat": 29.55545,
+  "lng": 34.96047,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - לאונרדו רויאל ריזורט אילת'; full multi-token name matches exactly, in Eilat"
+ },
+ {
+  "id": "17cfa82c-b149-45d4-abc3-6566ef96b711",
+  "name_he": "מלון מילוס",
+  "city": "ים המלח",
+  "lat": 31.20162,
+  "lng": 35.36526,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - מילוס ים המלח - בתי מלון'; exact name, and the record's 'city' is the Dead Sea region"
+ },
+ {
+  "id": "99dae2a8-e3bd-4151-9e2b-346dcdd95477",
+  "name_he": "מלון הילטון",
+  "city": "תל אביב",
+  "lat": 32.08965,
+  "lng": 34.77084,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - הילטון תל אביב-יפו', 2.0km from TLV centroid; only Hilton hotel in Tel Aviv"
+ },
+ {
+  "id": "8c0aed25-3d59-43f8-a420-9b5332ae8370",
+  "name_he": "מלון המלך שלמה",
+  "city": "אילת",
+  "lat": 29.5525,
+  "lng": 34.9619,
+  "source": "govmap.gov.il/api/search-service/autocomplete",
+  "why": "govmap POI 'מלון - המלך שלמה אילת'; exact name, Eilat branch chosen over the Jerusalem one by the record's city"
+ },
+ {
+  "id": "909f2bdf-43f6-41cc-816d-e5690aada8a6",
+  "name_he": "מנצילה",
+  "city": "באר שבע",
+  "lat": 31.25831,
+  "lng": 34.80599,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva licensed-business register: exact unique name 'מנצילה', ארלוזורוב 50"
+ },
+ {
+  "id": "7ddb558c-09f4-4770-bf0a-8105908284d7",
+  "name_he": "אליטל",
+  "city": "באר שבע",
+  "lat": 31.22431,
+  "lng": 34.80163,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva register: exact unique name 'אליטל', קטינקא 2/201 (Grand Kanyon)"
+ },
+ {
+  "id": "0750c127-145d-48bb-8bb3-6dcd002e88e7",
+  "name_he": "הדרומית",
+  "city": "באר שבע",
+  "lat": 31.22254,
+  "lng": 34.80308,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva register: exact unique name 'הדרומית', אלקיים ניסים 81/1"
+ },
+ {
+  "id": "78d3b83f-a72f-40f8-818a-62cfe007fb5b",
+  "name_he": "הפנינג",
+  "city": "באר שבע",
+  "lat": 31.25026,
+  "lng": 34.77231,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva register: exact unique name 'הפנינג', שד' טוביהו 125/308; toy/party store matches category"
+ },
+ {
+  "id": "da0768db-681e-4711-a130-459c85e7008d",
+  "name_he": "השווארמה של רונן",
+  "city": "באר שבע",
+  "lat": 31.25786,
+  "lng": 34.76802,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva register: exact unique name 'השווארמה של רונן', שאול המלך 80/1"
+ },
+ {
+  "id": "f1473473-a1f4-4408-bb09-4c71011293b6",
+  "name_he": "ויוינו",
+  "city": "באר שבע",
+  "lat": 31.2336,
+  "lng": 34.79608,
+  "source": "data.gov.il unified_businesses-br7",
+  "why": "Beer Sheva register: 'ויוינו אוכל איטלקי', תאנה 26/2; only Viuino in the city, 'Italian food' matches restaurant category"
+ }
+]

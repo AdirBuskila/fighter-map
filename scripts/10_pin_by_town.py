@@ -76,6 +76,11 @@ import time
 import requests
 
 CACHE = os.path.join("data", "town_centres.json")
+# Doorways found by hand against sources this pipeline does not use.
+# Committed rather than cached, because they cannot be regenerated
+# deterministically: they came out of a survey of what is even possible, and
+# each one carries the record it was matched to.
+EXACT = os.path.join("scripts", "exact_pins.json")
 UA = "fighter-map/1.0 (community benefit map for Israeli reservists)"
 # The same box /add enforces on a pasted link, and the same one the seed
 # scripts check. A geocoder that quietly answers with the middle of the
@@ -168,6 +173,23 @@ def main() -> int:
                                 "is_chain": "eq.false", "is_online": "eq.false",
                                 "city": "not.is.null",
                                 "select": "id,name_he,city", "limit": "5000"}).json()
+
+    # A real doorway always beats a town pin. These are the two narrow seams
+    # where a free source actually knows Israeli businesses: govmap's hotel
+    # gazetteer, and Beer Sheva's licensed-business register, the only such
+    # register published on data.gov.il. Measured yield everywhere else was
+    # zero, which is why there are sixteen of these and not four hundred.
+    exact = {}
+    if os.path.exists(EXACT):
+        for entry in json.load(io.open(EXACT, encoding="utf-8")):
+            lat, lng = float(entry["lat"]), float(entry["lng"])
+            if not (BOUNDS[0] <= lat <= BOUNDS[1] and BOUNDS[2] <= lng <= BOUNDS[3]):
+                sys.exit("%s is outside Israel: %s" % (entry["name_he"], entry))
+            exact[entry["id"]] = (lat, lng)
+    usable_exact = {k: v for k, v in exact.items() if k in {r["id"] for r in rows}}
+    if exact:
+        print("%d verified doorways on file, %d still unpinned"
+              % (len(exact), len(usable_exact)))
     if not rows:
         print("nothing to pin: every published place with a town already has a point")
         return 0
@@ -192,6 +214,11 @@ def main() -> int:
 
     updates, skipped = [], collections.Counter()
     for row in rows:
+        if row["id"] in usable_exact:
+            lat, lng = usable_exact[row["id"]]
+            updates.append({"id": row["id"], "city": row["city"],
+                            "lat": lat, "lng": lng, "precision": "exact"})
+            continue
         centre = cache.get(row["city"])
         if not centre:
             skipped[row["city"]] += 1
@@ -199,10 +226,14 @@ def main() -> int:
         lat, lng = offset_for(row["id"], centre["lat"], centre["lng"])
         if not (BOUNDS[0] <= lat <= BOUNDS[1] and BOUNDS[2] <= lng <= BOUNDS[3]):
             sys.exit("%s resolved outside Israel: %s" % (row["city"], centre))
-        updates.append({"id": row["id"], "city": row["city"], "lat": lat, "lng": lng})
+        updates.append({"id": row["id"], "city": row["city"],
+                        "lat": lat, "lng": lng, "precision": "town"})
 
-    print("\n%d places will get a town pin, %d left unpinned"
-          % (len(updates), sum(skipped.values())))
+    towns_n = sum(1 for u in updates if u["precision"] == "town")
+    exact_n = len(updates) - towns_n
+    print("\n%d places pinned: %d at a real doorway, %d at their town."
+          " %d left unpinned"
+          % (len(updates), exact_n, towns_n, sum(skipped.values())))
     if skipped:
         print("  towns that would not resolve: %s" % dict(skipped))
     print("\n  biggest stacks (they cluster on the map):")
@@ -221,7 +252,7 @@ def main() -> int:
             params={"id": "eq.%s" % update["id"]},
             data=json.dumps({
                 "location": "SRID=4326;POINT(%s %s)" % (update["lng"], update["lat"]),
-                "location_precision": "town",
+                "location_precision": update["precision"],
                 # It has a point now, so the 0006 flag no longer describes it.
                 # Each flag gets to mean one thing: pin_unavailable is "no point
                 # at all", location_precision is "the point is only the town".
@@ -236,9 +267,10 @@ def main() -> int:
         if written % 50 == 0:
             print("  %d/%d" % (written, len(updates)))
 
-    print("\npinned %d places at their town centre" % written)
-    print("Every one is location_precision='town'. The map draws them muted and")
-    print("their pages say the point is the settlement, not the address.")
+    print("\npinned %d places: %d exact, %d at their town"
+          % (written, exact_n, towns_n))
+    print("The town ones are location_precision='town': drawn muted on the map,")
+    print("said in words on their page, and kept out of navigation links.")
     print("\nLoad the site twice before concluding anything is wrong: this writes")
     print("straight to PostgREST, so revalidatePath never runs.")
     return 0

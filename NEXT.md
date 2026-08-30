@@ -21,7 +21,9 @@ python scripts/10_pin_by_town.py --dry-run   # says what it would write
 python scripts/10_pin_by_town.py             # writes it
 ```
 
-That takes the map from **271 pins to about 661**. The 390 it adds are pinned
+That takes the map from **271 pins to 661** — 390 new ones, of which 16 are
+real doorways and 374 are towns. Six rows are skipped because their "town" is
+a region rather than a settlement (ים המלח, עמק חפר, גושרים, קריון, צומת בילו). The 390 it adds are pinned
 at their town rather than their doorway, and every one of them says so: faded
 on the map, spelled out on its page, and excluded from navigation links. See
 "A pin that is only a town" below for why that is a trade worth making and
@@ -131,6 +133,33 @@ Two smaller things that fix would not catch, both still open:
 - **Nominatim returns streets.** `/api/search` learned to drop `highway`,
   `place` and `landuse` features; `03b_locate_remote.py` never did, which is
   how a street named לביא became a candidate for a clothes shop in מודיעין.
+
+## What a free geocoder can and cannot find in Israel
+
+Before falling back to town pins, the question "is there any free source that
+knows these businesses" was measured rather than assumed. The answer is almost
+entirely no, and the shape of the no is worth keeping so nobody re-runs it:
+
+| source | what it is | measured |
+|---|---|---|
+| **govmap.gov.il** | `POST /api/search-service/autocomplete`, no key, returns EPSG:3857 | **0 of 30** general businesses |
+| govmap, hotels only | it stores hotels as `מלון - <name> <city>` | **10 of 25** |
+| **data.gov.il** | CKAN; `unified_businesses-br7`, 3,054 rows with coordinates | **6 of 26** Beer Sheva rows |
+| Nominatim / Photon | already run by `03b_locate_remote.py` | ~0, established earlier |
+
+govmap's *address* layer is excellent, but every one of these rows has
+`address_he = null`, so it cannot be reached. Its POI layer is a register of
+notable institutions, not a business directory: `ארומה` returns one POI in the
+whole country, and `מקדונלדס`, `זארה`, `קסטרו` and `פיצה האט` return none.
+On data.gov.il, Beer Sheva is the only municipality publishing a usable
+licensed-business register — Tel Aviv and Jerusalem publish none.
+
+That is where `scripts/exact_pins.json` comes from: 16 doorways, 10 hotels and
+6 Beer Sheva businesses, each carrying the record it was matched against.
+`10_pin_by_town.py` applies them before it falls back, so a real address always
+beats a town. Ambiguous matches were thrown away rather than kept — four
+Leonardos in Eilat cannot be told apart from "מלון לאונרדו", and a hundred-score
+fuzzy hit on a chain with two branches is not a location.
 
 ## A pin that is only a town
 
