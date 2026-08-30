@@ -1,8 +1,40 @@
 # Where this is up to
 
-Migrations 0001 to 0006 are applied to the production database, and
-everything resting on them is committed and deployed. Turnstile is still open,
-and so is a queue of 20 pins that predate a fix described below.
+Migrations 0001 to 0006 are applied to the production database. **0007 is
+written, committed and NOT applied** — see the top item below. Turnstile is
+still open, and so is a queue of 20 pins that predate a fix described further
+down.
+
+## 1. Migration 0007 is waiting, and 390 pins are waiting behind it
+
+`supabase/migrations/0007_location_precision.sql` adds `location_precision`
+and threads it through the three read RPCs. Until it is applied the column is
+absent, the RPCs return 23 fields, `place.location_precision` is `undefined`
+in the client, and every comparison against `"town"` is false — so the app
+behaves exactly as it did before. Nothing is broken by the wait; nothing is
+gained either.
+
+Paste the file into the SQL editor, then:
+
+```bash
+python scripts/10_pin_by_town.py --dry-run   # says what it would write
+python scripts/10_pin_by_town.py             # writes it
+```
+
+That takes the map from **271 pins to about 661**. The 390 it adds are pinned
+at their town rather than their doorway, and every one of them says so: faded
+on the map, spelled out on its page, and excluded from navigation links. See
+"A pin that is only a town" below for why that is a trade worth making and
+what defends it.
+
+To check 0007 took:
+
+```sql
+select location_precision, count(*) from places
+ where location is not null group by 1;
+```
+
+Before the pin script that returns one row, `exact`. After it, two.
 
 **The /admin backlog is gone.** It was 482 places; it is now 6. They were not
 pinned — they were published without a pin, which is a different and better
@@ -99,6 +131,45 @@ Two smaller things that fix would not catch, both still open:
 - **Nominatim returns streets.** `/api/search` learned to drop `highway`,
   `place` and `landuse` features; `03b_locate_remote.py` never did, which is
   how a street named לביא became a candidate for a clothes shop in מודיעין.
+
+## A pin that is only a town
+
+476 published places had no coordinates at all, so they could not be seen on
+the map. Both geocoding passes had already run over them; these were the
+leftovers, because OpenStreetMap has never heard of most small Israeli
+businesses. It knows every town, though, and 396 of the 476 carry one. 115 of
+their 120 towns resolve, covering 389 rows. One more was recovered from a name
+that contained its town. The remaining 79 have nothing but a name and stay
+listed without a pin, because "somewhere in Israel" is not a location.
+
+This document previously refused exactly this, and the reasoning still stands
+in full: a place at the centroid of its town "is on the map, looks right, and
+sends somebody to the wrong building". Three clauses, and only the middle one
+is now false. A pin that is labelled approximate does not look right; it looks
+approximate. So:
+
+- `location_precision` is `'exact'` or `'town'`, and unlike `pin_unavailable`
+  it **does** go through the read RPCs, because the client has to render it.
+  A reader must never see a dot without also seeing what it is worth, and
+  `lat is null` cannot say that when the row has a lat. `Place` is 24 fields.
+- the map draws a town pin at 45% opacity. Not a colour and not a shape:
+  colour already means the benefit, hollow already means a single report, and
+  both were chosen together to survive colour blindness.
+- the place page says it in words and offers the Google search by name and
+  town, which is what actually finds the door.
+- **nothing navigates to a town pin.** `googleMapsUrl()` and `wazeUrl()` treat
+  it as no pin at all and fall back to searching. Without this, Waze would
+  have accepted the point and driven a reservist to the middle of Eilat
+  announcing they had arrived. `npm run urls` holds it down.
+
+The points are spread over a 400m disc around the town, deterministically from
+the place id, rather than stacked on the centroid. Stacked, sixty-six places
+in Eilat are one coordinate: MapLibre clusters them all the way in and the
+reader can reach exactly one of them. Spreading is safe *because* nothing
+navigates to these points — the dot's only job is to say "one of these is
+around here", and a disc says that better than a spike. Measured over Eilat's
+sixty-six: all within 400m, median 286m out, nearest neighbours a median 50m
+apart, every point distinct and stable across runs.
 
 ## A place we cannot pin
 

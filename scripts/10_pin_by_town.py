@@ -32,10 +32,23 @@ WHAT IT WILL NOT DO.
     only ever fills a hole.
   * It will not invent a town. 80 rows have nothing but a name, and they stay
     unpinned and listed, because "somewhere in Israel" is not a location.
-  * It will not scatter the points. Sixty-six places in Eilat all land on the
-    same coordinate, and the map clusters them into a "66". That is ugly and
-    it is honest: spreading them would put each shop on a specific building
-    that it is not in, which is the exact error being avoided.
+  * It spreads a town's places over a small deterministic disc rather than
+    stacking them, and that decision is worth defending because the instinct
+    is to call it faking precision.
+
+    Stacked, sixty-six places in Eilat are one coordinate. MapLibre clusters
+    them all the way in, and at maximum zoom the reader sees a single pin and
+    can reach exactly one of the sixty-six; the other sixty-five exist only in
+    the list. That is not more honest, it is just less useful.
+
+    What makes spreading safe here is that these points are no longer anything
+    anyone is sent to. googleMapsUrl() and wazeUrl() treat a town pin as no
+    pin and search by name and town instead, so nothing navigates to the dot.
+    Its only job is to say "one of these is somewhere around here", and for
+    that a small disc says it better than a spike.
+
+    The offset is derived from the place id, so it is stable across reruns --
+    a pin that wanders between deploys would look like the data changed.
   * It will not write a point outside the country. Every centroid is checked
     against the same box the submission form enforces.
 
@@ -52,8 +65,10 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import io
 import json
+import math
 import os
 import sys
 import time
@@ -70,6 +85,32 @@ BOUNDS = (29.4, 33.45, 34.2, 35.95)
 # A settlement, not a road or a shop. Nominatim will happily return a street
 # called after a town, and a street centroid is a different and worse lie.
 SETTLEMENT_KINDS = ("place", "boundary", "landuse")
+
+
+# Roughly a quarter of a degree of longitude per kilometre at this latitude.
+# 400m is small enough to sit inside any real settlement and large enough that
+# the dots separate at street zoom.
+SPREAD_M = 400.0
+
+
+def offset_for(place_id: str, lat: float, lng: float) -> tuple[float, float]:
+    """A small, stable displacement from the town centre.
+
+    Derived from the id rather than randomised, so the same place lands on the
+    same dot on every run. A pin that moved between deploys would read as the
+    data having changed.
+
+    The angle and the radius come from different slices of the digest, and the
+    radius is square-rooted so the points spread evenly over the disc instead
+    of bunching in the middle, which is what makes a cluster of them read as a
+    scatter rather than a smudge.
+    """
+    digest = hashlib.sha256(place_id.encode("utf-8")).digest()
+    angle = (int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * 2 * math.pi
+    radius = math.sqrt(int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * SPREAD_M
+    d_lat = (radius * math.cos(angle)) / 111_320.0
+    d_lng = (radius * math.sin(angle)) / (111_320.0 * math.cos(math.radians(lat)))
+    return round(lat + d_lat, 6), round(lng + d_lng, 6)
 
 
 def resolve_town(session: requests.Session, name: str):
@@ -155,7 +196,7 @@ def main() -> int:
         if not centre:
             skipped[row["city"]] += 1
             continue
-        lat, lng = centre["lat"], centre["lng"]
+        lat, lng = offset_for(row["id"], centre["lat"], centre["lng"])
         if not (BOUNDS[0] <= lat <= BOUNDS[1] and BOUNDS[2] <= lng <= BOUNDS[3]):
             sys.exit("%s resolved outside Israel: %s" % (row["city"], centre))
         updates.append({"id": row["id"], "city": row["city"], "lat": lat, "lng": lng})
@@ -166,7 +207,7 @@ def main() -> int:
         print("  towns that would not resolve: %s" % dict(skipped))
     print("\n  biggest stacks (they cluster on the map):")
     for town, n in collections.Counter(u["city"] for u in updates).most_common(8):
-        print("     %-18s %d places on one point" % (town, n))
+        print("     %-18s %d places" % (town, n))
 
     if args.dry_run:
         print("\ndry run, nothing written")
