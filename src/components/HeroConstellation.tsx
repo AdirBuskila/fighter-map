@@ -120,35 +120,36 @@ export default function HeroConstellation({ places, publishedTotal }: Props) {
             הוסיפו מקום
           </Link>
         </div>
+
+        {/*
+          Three counts, all true at once, and the page says so rather than
+          picking the flattering one. The map draws what has coordinates; the
+          site lists a great deal more, because OpenStreetMap does not know most
+          small Israeli businesses and those places are listed instead of mapped.
+          Hiding the gap would make the smaller number look like the whole story.
+        */}
+        <dl className="hero-const__stats">
+          <div>
+            <dt>מקומות באתר</dt>
+            <dd>{publishedTotal.toLocaleString("he-IL")}</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="hero-const__key hero-const__key--fighter" />
+              כרטיס פייטר
+            </dt>
+            <dd>{fighter.toLocaleString("he-IL")}</dd>
+          </div>
+          <div>
+            <dt>
+              <span className="hero-const__key hero-const__key--voucher" />
+              שובר חופשה
+            </dt>
+            <dd>{voucher.toLocaleString("he-IL")}</dd>
+          </div>
+        </dl>
       </div>
 
-      {/*
-        Three counts, all true at once, and the page says so rather than
-        picking the flattering one. The map draws what has coordinates; the
-        site lists a great deal more, because OpenStreetMap does not know most
-        small Israeli businesses and those places are listed instead of mapped.
-        Hiding the gap would make the smaller number look like the whole story.
-      */}
-      <dl className="hero-const__stats">
-        <div>
-          <dt>מקומות באתר</dt>
-          <dd>{publishedTotal.toLocaleString("he-IL")}</dd>
-        </div>
-        <div>
-          <dt>
-            <span className="hero-const__key hero-const__key--fighter" />
-            כרטיס פייטר
-          </dt>
-          <dd>{fighter.toLocaleString("he-IL")}</dd>
-        </div>
-        <div>
-          <dt>
-            <span className="hero-const__key hero-const__key--voucher" />
-            שובר חופשה
-          </dt>
-          <dd>{voucher.toLocaleString("he-IL")}</dd>
-        </div>
-      </dl>
     </section>
   );
 }
