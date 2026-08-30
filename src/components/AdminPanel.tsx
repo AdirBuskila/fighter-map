@@ -31,6 +31,8 @@ const REASON_LABELS: Record<string, string> = {
   not_located: "עוד לא נבדק מול המפה",
   low_confidence: "השם מהקובץ לא ברור מספיק",
   unclear: "לא ברור איזה עסק זה",
+  city_unresolved: "היישוב שדווח לא נמצא במפה",
+  wrong_osm_match: "ההתאמה שנמצאה הייתה ביישוב אחר",
 };
 
 export default function AdminPanel() {

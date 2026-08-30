@@ -12,7 +12,7 @@ place_id played: two people reporting the same shop land on the same row.
 Coordinates and address are a refreshable cache; re-running after a newer
 extract updates them without changing identity.
 
-Two hard guards against confident nonsense, which is the failure mode that
+Three hard guards against confident nonsense, which is the failure mode that
 matters. A wrong pin is worse than a missing one:
 
   1. Name similarity needs BOTH token_set_ratio and token_sort_ratio. Set ratio
@@ -22,6 +22,11 @@ matters. A wrong pin is worse than a missing one:
      --city-radius of that city. This is the strong one: Photon happily
      returned a Jerusalem detention centre for a Jerusalem cafe, and geography
      rejects that instantly.
+  3. If the reporter named a city and we cannot place that city, nothing is
+     accepted at all. Guard 2 used to be skipped in that case, which quietly
+     made it weakest on the names it was meant to protect: the locality
+     extract has no node for תל אביב, so every Tel Aviv report was matched on
+     name alone and one of them landed in Rishon LeZion.
 
 Usage:
     python scripts/03_locate.py
@@ -36,6 +41,7 @@ import json
 import math
 import random
 import sys
+from collections import defaultdict
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -92,8 +98,13 @@ CANDIDATES = 12
 # Missing the retired names is how 610 stale rows survived a provider swap.
 LOCATE_REASONS = {
     "no_osm_match", "low_match_confidence", "not_located",
-    "not_geocoded", "no_google_result",
+    "not_geocoded", "no_google_result", "city_unresolved",
 }
+
+# How many POIs must agree on a city name before their centroid is trusted as
+# that city's position. One mistagged addr:city should not be able to invent a
+# locality; three make it a real place.
+MIN_CITY_POIS = 3
 
 
 def haversine_km(a_lat, a_lon, b_lat, b_lon) -> float:
@@ -106,8 +117,21 @@ def haversine_km(a_lat, a_lon, b_lat, b_lon) -> float:
     return 2 * r * math.asin(math.sqrt(h))
 
 
-def build_locality_index(rows: list) -> dict:
-    """canon(name) -> (lat, lon), preferring the largest settlement of that name."""
+def build_locality_index(rows: list, pois: list | None = None) -> dict:
+    """canon(name) -> (lat, lon), preferring the largest settlement of that name.
+
+    The Geofabrik place layer is not the complete list of Israeli towns it
+    looks like. It has no node for תל אביב at all, none for מודיעין, and it
+    files פרדס חנה only under the municipality's full name פרדס חנה-כרכור. A
+    city missing here used to be silently harmless, because an unresolved city
+    just switched the geography guard off; it is the reason a Tel Aviv cafe
+    could be pinned in Rishon and a קרית חיים burger bar in Jerusalem.
+
+    So POI street addresses stand in as a second source. addr:city is written
+    by the same mappers on the businesses themselves, it names the places
+    people actually write in reports, and the median of every POI claiming one
+    city is a robust enough centre for a 25 km gate.
+    """
     rank = {"city": 0, "town": 1, "village": 2, "suburb": 3, "neighbourhood": 4, "hamlet": 5}
     index: dict = {}
     for row in sorted(rows, key=lambda r: rank.get(r["kind"], 9)):
@@ -117,6 +141,20 @@ def build_locality_index(rows: list) -> dict:
             key = canon(name)
             if key and key not in index:
                 index[key] = (row["lat"], row["lon"])
+
+    if pois:
+        by_city = defaultdict(list)
+        for poi in pois:
+            key = canon(poi.get("city") or "")
+            if key:
+                by_city[key].append((poi["lat"], poi["lon"]))
+        for key, points in by_city.items():
+            if key in index or len(points) < MIN_CITY_POIS:
+                continue
+            lats = sorted(p[0] for p in points)
+            lons = sorted(p[1] for p in points)
+            mid = len(points) // 2
+            index[key] = (lats[mid], lons[mid])
     return index
 
 
@@ -143,6 +181,12 @@ def locate(place: dict, pois, names, owner, localities, min_conf, radius_km) -> 
 
     city = place.get("city")
     centre = localities.get(canon(city)) if city else None
+    # A city we cannot place is not the same as no city at all. Falling
+    # through to an unconstrained name match here is how a report that named
+    # its town ends up pinned in a different one, which is worse than leaving
+    # it for a moderator: the reporter told us where it was and we ignored it.
+    if city and centre is None:
+        return place, "city_unresolved"
 
     hits = process.extract(query, names, scorer=fuzz.token_set_ratio,
                            limit=CANDIDATES, score_cutoff=min_conf * 100)
@@ -226,7 +270,7 @@ def main() -> int:
             sys.exit("%s is missing. Run scripts/03a_osm_extract.py first." % path.name)
 
     pois = json.loads(POIS.read_text(encoding="utf-8"))
-    localities = build_locality_index(json.loads(LOCALITIES.read_text(encoding="utf-8")))
+    localities = build_locality_index(json.loads(LOCALITIES.read_text(encoding="utf-8")), pois)
     names, owner = build_search_space(pois)
     print("index: %d businesses, %d searchable names, %d localities"
           % (len(pois), len(names), len(localities)))

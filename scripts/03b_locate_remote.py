@@ -28,6 +28,9 @@ answer earns no extra trust for having cost a network round trip:
      because the generic word inflates everything
   2. if the reporter named a city, the answer must be within --city-radius of
      it, which is what kills the confident nonsense
+  3. and if the reporter named a city we cannot place at all, nothing is
+     accepted. Letting an unresolvable city mean "no city" turns guard 2 off
+     exactly where it is needed most
 
 Usage:
     python scripts/03b_locate_remote.py
@@ -50,6 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PLACES = ROOT / "data" / "places.json"
 REVIEW = ROOT / "data" / "needs_review.json"
 LOCALITIES = ROOT / "data" / "osm_places.json"
+POIS = ROOT / "data" / "osm_pois.json"
 CACHE = ROOT / "data" / "remote_locate_cache.json"
 
 _locate = SourceFileLoader("_locate", str(ROOT / "scripts" / "03_locate.py")).load_module()
@@ -152,6 +156,11 @@ def judge(place: dict, candidates: list, localities: dict,
     query_core = distinctive(place["name_he"])
     city = place.get("city")
     centre = localities.get(canon(city)) if city else None
+    # Same rule as the local pass: a city we cannot place is not a licence to
+    # match on name alone. Photon in particular will happily hand back the
+    # same brand in another town, and there would be nothing left to reject it.
+    if city and centre is None:
+        return None
 
     best, best_score = None, 0.0
     for cand in candidates:
@@ -204,13 +213,14 @@ def main() -> int:
     ap.add_argument("--offline", action="store_true", help="cache only, no requests")
     args = ap.parse_args()
 
-    for path in (PLACES, REVIEW, LOCALITIES):
+    for path in (PLACES, REVIEW, LOCALITIES, POIS):
         if not path.exists():
             sys.exit("%s is missing. Run scripts/03_locate.py first." % path.name)
 
     places = json.loads(PLACES.read_text(encoding="utf-8"))
     review = json.loads(REVIEW.read_text(encoding="utf-8"))
-    localities = build_locality_index(json.loads(LOCALITIES.read_text(encoding="utf-8")))
+    localities = build_locality_index(json.loads(LOCALITIES.read_text(encoding="utf-8")),
+                                      json.loads(POIS.read_text(encoding="utf-8")))
 
     todo = [r for r in review
             if r.get("review_reason") in RETRYABLE and r.get("kind") == "single_location"]

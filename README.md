@@ -74,6 +74,10 @@ py -3.13 -m venv .venv
 # Phase 1 - PDF to structured rows (no keys needed)
 ./.venv/Scripts/python.exe scripts/01_extract.py
 
+# Phase 1b - fold in a fresh CSV export of the same sheet
+./.venv/Scripts/python.exe scripts/01b_csv_rows.py --verify
+./.venv/Scripts/python.exe scripts/01b_csv_rows.py
+
 # Phase 2 - free text to canonical places (cached, no API call needed)
 ./.venv/Scripts/python.exe scripts/02_normalize.py --offline
 
@@ -170,23 +174,34 @@ UI is inspectable. Production never does this.
 ## How the data flows
 
 ```
-fighter.pdf
-  |  01_extract.py     drawn text runs, RTL repaired, columns split by rule
-  v
-data/raw_rows.json                     759 rows
+fighter.pdf                            places.csv
+  |  01_extract.py                       |  01b_csv_rows.py
+  |  drawn text runs, RTL repaired,      |  a later export of the same sheet,
+  |  columns split by rule               |  merged cell by cell
+  v                                      v
+data/raw_rows.json                     832 rows
   |  02_normalize.py   Claude splits multi-place cells, classifies, dedups
   v
-data/normalized.json                   857 places
+data/normalized.json                   930 places
 data/needs_review.json                 low confidence, for /admin
   |  03a_osm_extract.py    30,270 named businesses in Israel, from OSM
   |  03_locate.py          matched locally, the OSM ref becomes the key
   |  03b_locate_remote.py  Nominatim then Photon for the leftovers
   v
-data/places.json                       209 located, 396 to review
+data/places.json                       206 located, 425 to review
   |  05_seed_supabase.py
   v
 Supabase -> the app
 ```
+
+`places.csv` is the second input because the PDF is a snapshot and the sheet
+behind it keeps filling up. The merge runs per cell rather than per row: the
+two sources disagree cell by cell, and ten rows the PDF did extract carry a
+voucher cell its ruling lines lost. Cells are matched on a token fingerprint,
+because the RTL repair reorders Latin islands, welds "ביגוד B" into "ביגודB"
+and drops a URL's scheme. `--verify` checks the diff the only way that can be
+checked automatically: no cell recorded after the PDF was printed may match
+anything already in it.
 
 Nothing under `data/` is committed, and neither is `fighter.pdf`. Both carry
 private individuals' mobile numbers verbatim, and the OSM extract is 119 MB.
@@ -204,8 +219,20 @@ private individuals' mobile numbers verbatim, and the OSM extract is 119 MB.
 | 5 reports per reporter per hour | `rateLimited()` in the route handlers |
 | A submission within 75 m of an existing place, under the same name, confirms it instead of adding a pin | `place_near_match()` + `/api/submissions` |
 
-Coverage is the honest weak spot of going key-free. OSM knows 209 of the 610
+Coverage is the honest weak spot of going key-free. OSM knows 206 of the 673
 imported single locations; Google would have found most of the rest.
+
+It got worse before it got better, and on purpose. The city gate only ran when
+`build_locality_index` could place the city the reporter named, and that index
+is a Geofabrik place layer with no node for תל אביב, none for מודיעין, and
+פרדס חנה filed only as פרדס חנה-כרכור. An unresolvable city therefore switched
+the guard off entirely, leaving the match to run on name alone, so the guard
+was weakest on exactly the names it existed to protect: a Tel Aviv cafe pinned
+in Rishon, a קרית חיים burger bar pinned in Jerusalem. 50 of 230 pins had had
+no geographic check at all. Now a city that cannot be placed rejects the match
+outright and the row waits in /admin, and POI `addr:city` medians stand in as a
+second source for the index so that costs less coverage than it sounds
+(תל אביב resolves to within 2 km, מודיעין to within 4.3 km).
 
 That gap is also what people write in about: they go to add a shop, the search
 cannot find it, and they give up and send an email instead. So `/add` takes a

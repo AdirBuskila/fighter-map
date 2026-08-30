@@ -1,8 +1,8 @@
 # Where this is up to
 
 Migrations 0001 to 0005 are applied to the production database, and
-everything resting on them is committed and deployed. One optional item is
-open.
+everything resting on them is committed and deployed. Turnstile is still open,
+and so is a queue of 20 pins that predate a fix described below.
 
 Migration 0005 **is** applied — that was checked directly rather than assumed,
 by calling the function it adds:
@@ -37,6 +37,64 @@ forbids a single row from being both pinned and online, so it is two rows. The
 online one carries `provider_ref = null` deliberately: the ftid means "the door
 in בית אל", and lending it to the web shop would make a later /add of the
 physical shop merge into the online row and lose the pin.
+
+## The August sheet export is folded in
+
+`places.csv`, a later export of the same Google Sheet `fighter.pdf` was
+printed from, is now a second input to Phase 1. Of its 998 benefit cells, 925
+were already in `raw_rows.json`; **73 were not** and are now loaded:
+
+- **63** reported after the PDF snapshot ended on 2026-08-23
+- **10** voucher cells on rows the PDF *did* extract, whose voucher column its
+  ruling lines dropped
+
+Those 73 cells normalised to 75 new places and 6 updates to existing ones. 80
+rows went to Supabase: 26 published (12 pinned, 14 chains and online shops
+that carry no pin by design), 54 waiting in `/admin`. The database went from
+935 places to 1009, and no trust counter moved.
+
+Three things worth knowing about that run:
+
+- **קלאב הוטל אילת was already there**, added through `/add` by a reservist
+  who also vouched for it. `provider_ref` is unique, so the insert failed
+  loudly rather than laying a second pin on the same door, which is the
+  constraint doing its job. That row was dropped from the load.
+- **Two cells were too vague to pin.** A bare "תמנון" and a bare "קמיליון",
+  with no city, where the corpus already knows four תמנון and a קמיליון in
+  פתח תקווה. Left at confidence 0.5 they go to `/admin`; at 0.6 the locate
+  pass had matched them on name alone and put תמנון on the Beer Sheva row and
+  קמיליון near Ma'ale Adumim.
+- **Five pins were verified wrong by hand and demoted** before loading, all of
+  them matches that cleared the 25 km gate but sat in the wrong town, plus one
+  street Nominatim returned instead of a shop. They carry
+  `review_reason = wrong_osm_match`.
+
+Phase 2 needed no API key. The 72 distinct new cells were normalised by hand
+into `data/csv_handoff.jsonl` and written into the Phase 2 cache with
+`scripts/seed_cache.py`, which is what that script is for, so
+`02_normalize.py --offline` reproduces the whole corpus from cache.
+
+## 20 live pins predate the city-gate fix
+
+The gate that rejects a candidate too far from the city the reporter named
+used to be skipped whenever the locality index could not place that city, and
+the index has no node for תל אביב, מודיעין or פרדס חנה. `03_locate.py` and
+`03b_locate_remote.py` now refuse the match instead, and POI `addr:city`
+medians widen the index. But **20 rows already published carry a pin placed
+while the gate was off**, listed in the run that produced them; hand-checking
+a sample found מיני אלנבי and מלון דן, both tagged תל אביב, pinned in
+Jerusalem. Nothing has been changed about them - they are live, and re-pinning
+or retiring them is a call worth making deliberately rather than as a side
+effect of an import.
+
+Two smaller things that fix would not catch, both still open:
+
+- **25 km is generous in the centre of the country.** H&M reported in רמלה
+  matched a branch 18 km away in Kiryat Ono and still cleared the gate.
+  Tightening the radius needs its own tuning pass over the whole corpus.
+- **Nominatim returns streets.** `/api/search` learned to drop `highway`,
+  `place` and `landuse` features; `03b_locate_remote.py` never did, which is
+  how a street named לביא became a candidate for a clothes shop in מודיעין.
 
 ## How contribution works
 
@@ -95,10 +153,11 @@ select position('cur_source' in prosrc) > 0 as new_trust_rule
   section J holds it down with the AWS metadata address and a
   `goo.gl.evil.example` lookalike
 
-- 209 of 610 imported places have coordinates. OSM does not know most small
-  Israeli businesses. The other 396 sit in `/admin`, where a moderator can
+- 206 of 673 imported places have coordinates. OSM does not know most small
+  Israeli businesses. The other 425 sit in `/admin`, where a moderator can
   search and pin one in a few seconds. Chipping at that queue is still the
-  single best way to make the map denser.
+  single best way to make the map denser, and it is now the only way the
+  places whose town the index cannot resolve will ever get a pin.
 - `npm run smoke` drives a real browser, desktop and mobile, 24 checks locally
   and 17 against production, where the map internals are not exposed. Three of
   the worst bugs here were invisible to every other suite, the most recent

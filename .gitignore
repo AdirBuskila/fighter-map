@@ -23,8 +23,11 @@ next-env.d.ts
 data/*
 !data/.gitkeep
 
-# The source spreadsheet export, same reason.
+# The source spreadsheet, printed and exported, same reason. places.csv is the
+# later export the PDF snapshot is missing the tail of; it carries five private
+# mobile numbers verbatim.
 fighter.pdf
+places.csv
 
 # os
 .DS_Store
