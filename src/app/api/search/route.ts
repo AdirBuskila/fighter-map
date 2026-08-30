@@ -26,6 +26,29 @@ const UA = "fighter-map/1.0 (community benefit map for Israeli reservists)";
 
 const OSM_TYPE: Record<string, string> = { N: "node", W: "way", R: "relation" };
 
+// Photon indexes the whole of OpenStreetMap, not just businesses, and a shop
+// OSM has never heard of does not come back empty -- it comes back matched
+// against geography. Searching בת חן שריג, a real boutique in בית אל, returns
+// six residential streets called בת חן, in six towns that are not the one the
+// shop is in.
+//
+// That is worse than nothing, twice. The list looks like an answer, so a
+// contributor can pin their shop onto a street in another town and never know;
+// and because the list is not empty, the Google Maps link -- the path that
+// actually works for exactly these places -- stays collapsed, since
+// PlacePicker only offers it when a search returns nothing at all.
+//
+// Every key here describes geography or infrastructure and can never be a
+// business, so dropping them turns six wrong answers into no answers, which is
+// the state the form already knows what to do with. It is a denylist rather
+// than an allowlist of shop/amenity/... because a business can be tagged in
+// surprising ways -- מאפיית בית-אל, a working bakery, is building/bakehouse --
+// and losing a real shop is the more expensive mistake.
+const NOT_A_BUSINESS = new Set([
+  "highway", "place", "boundary", "landuse", "natural", "waterway",
+  "railway", "barrier", "man_made", "power", "route", "aeroway",
+]);
+
 export type SearchResult = {
   providerRef: string;
   name: string;
@@ -88,6 +111,7 @@ export async function GET(request: Request) {
     // No name means a bare address, and no ref means nothing to key on. Both
     // are useless here: this endpoint exists to identify a business.
     if (!coords || !osmType || !props.osm_id || !name) continue;
+    if (NOT_A_BUSINESS.has(String(props.osm_key ?? ""))) continue;
 
     const street = typeof props.street === "string" ? props.street : null;
     const houseNumber = typeof props.housenumber === "string" ? props.housenumber : null;

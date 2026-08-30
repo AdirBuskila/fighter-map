@@ -254,6 +254,31 @@ def main() -> int:
     short = requests.get(f"{BASE}/api/search", params={"q": "a"}, timeout=30)
     check("a one letter query is not sent upstream", short.json().get("results"), [])
 
+    # Photon indexes all of OSM, so a shop it has never heard of does not come
+    # back empty -- it comes back matched against streets and villages of a
+    # similar name. Two things then go wrong at once: the list looks like an
+    # answer, so the shop gets pinned in the wrong town, and PlacePicker only
+    # offers the Google Maps link when a search returns NOTHING, so the one
+    # path that works for this shop stays collapsed. Both were live until the
+    # route started dropping non-business features.
+    #
+    # בת חן שריג is the case that found it: a real boutique in בית אל, absent
+    # from OSM, which used to return six residential streets called בת חן.
+    junk = requests.get(f"{BASE}/api/search",
+                        params={"q": "בת חן שריג", "limit": 8}, timeout=30)
+    check("a shop OSM does not know returns nothing",
+          junk.json().get("results"), [])
+    # The half that matters more: the filter must not have eaten real shops.
+    still = requests.get(f"{BASE}/api/search",
+                         params={"q": "קסטרו", "limit": 5}, timeout=30)
+    check("and a real chain still comes back",
+          len(still.json().get("results", [])) > 0, True)
+    keys = requests.get(f"{BASE}/api/search",
+                        params={"q": "בית קפה", "limit": 8}, timeout=30)
+    check("no bus stop is offered as a business",
+          any("bus" in str(h.get("name", "")).lower() for h in keys.json().get("results", [])),
+          False)
+
     print(chr(10) + "G. pinning a place the geocoders could not find")
     # A few hundred imported places have no coordinates because OSM simply
     # does not know them. The queue lets a moderator search and pin one,
