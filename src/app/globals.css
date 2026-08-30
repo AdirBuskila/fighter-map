@@ -574,16 +574,65 @@ label.tap {
   background: color-mix(in srgb, var(--fighter) 88%, black);
 }
 
-/* The reader's own position on the map. Deliberately not one of the benefit
-   colours: it is not a place you can spend the card at. */
+/* The reader's own position on the map.
+
+   Not one of the benefit colours, because it is not a place you can spend the
+   card at -- and, more than that, not a filled dot at all. This map carries
+   meaning in shape before colour: a circle is the fighter card, a diamond is
+   the voucher, a ringed circle is both. Anything round and filled therefore
+   reads as somewhere you can pay. "You" has to be categorically a different
+   mark, so it is a survey benchmark: four ticks around a centre point, which
+   is the same wayfinding vocabulary the rest of the palette comes from.
+
+   The colour pairing is the part that was actually broken. It used to be
+   `background: var(--ink)` inside a hard-coded `2px solid #ffffff`. That is a
+   black dot in a white ring in light theme, and in dark theme --ink is
+   #edf0f3, so it became a white dot in a white ring: the ring disappeared and
+   left a featureless white lozenge on the map. Both the mark and its halo now
+   come from tokens, so the pair inverts together instead of collapsing.
+
+   The ticks stop short of the centre rather than crossing it. The gap is what
+   keeps the centre point readable without a third element, and it is what
+   makes this read as a benchmark rather than a gunsight. */
 .origin-dot {
   display: block;
-  width: 0.9rem;
-  height: 0.9rem;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  background: var(--ink);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fighter) 40%, transparent);
+  width: 1.75rem;
+  height: 1.75rem;
+  position: relative;
+  /* Centre point, with a halo so it survives whatever is under it. */
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--ink) 0 3.5px,
+    var(--bg) 3.5px 5.5px,
+    transparent 5.5px
+  );
+}
+.origin-dot::before,
+.origin-dot::after {
+  content: "";
+  position: absolute;
+}
+.origin-dot::before {
+  inset-inline: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    var(--ink) 0 30%,
+    transparent 30% 70%,
+    var(--ink) 70% 100%
+  );
+}
+.origin-dot::after {
+  inset-block: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--ink) 0 30%,
+    transparent 30% 70%,
+    var(--ink) 70% 100%
+  );
 }
 
 /* MapLibre's own chrome, brought into the palette. */
