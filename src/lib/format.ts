@@ -85,7 +85,7 @@ export function wazeUrl(place: Place): string {
   if (place.lat != null && place.lng != null) {
     return `https://waze.com/ul?ll=${place.lat},${place.lng}&navigate=yes`;
   }
-  return `https://waze.com/ul?q=${encodeURIComponent(place.name_he)}`;
+  return `https://waze.com/ul?q=${encodeURIComponent(searchTerms(place))}`;
 }
 
 /**
@@ -93,12 +93,39 @@ export function wazeUrl(place: Place): string {
  * account. Coordinates beat a name search when we have them, because a name
  * search lands the reader on whichever branch the provider feels like.
  */
+/**
+ * What to hand a search engine when we have no point of our own.
+ *
+ * Most of the imported corpus has no coordinates: OpenStreetMap has never
+ * heard of small Israeli businesses, and both geocoding passes already gave
+ * up on these. Google has heard of them, so the honest fallback is to let it
+ * do the finding -- but only if the query is specific enough to land.
+ *
+ * The name alone is not. "קמיליון" is a word; "קמיליון תל אביב" is a shop.
+ * So the town goes in, and the street too where the row has one, because a
+ * chain branch is otherwise indistinguishable from forty others.
+ */
+function searchTerms(place: Place): string {
+  const parts: string[] = [place.name_he];
+  if (place.address_he) parts.push(place.address_he);
+  // Skip the town when it is already in the name or the address. Israeli
+  // branch names carry their town constantly -- אושיקה מעלה אדומים, בית
+  // הפרגית צפת -- and roughly half the imported addresses end in it too, so
+  // appending it blindly produces "אושיקה מעלה אדומים מעלה אדומים", which is
+  // a worse query than the name on its own.
+  const said = `${place.name_he} ${place.address_he ?? ""}`;
+  if (place.city && !said.includes(place.city)) parts.push(place.city);
+  return parts.join(" ");
+}
+
 export function googleMapsUrl(place: Place): string {
   if (place.lat != null && place.lng != null) {
-    const label = encodeURIComponent(place.name_he);
-    return `https://www.google.com/maps/search/?api=1&query=${place.lat}%2C${place.lng}&query=${label}`;
+    // One `query`, not two. This used to append `&query=<name>` after the
+    // coordinates; Google keeps the last of a repeated parameter, so every
+    // pinned place opened as a name search and threw its own point away.
+    return `https://www.google.com/maps/search/?api=1&query=${place.lat}%2C${place.lng}`;
   }
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name_he)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTerms(place))}`;
 }
 
 /** The place as OpenStreetMap knows it, so a reader can fix a wrong pin. */

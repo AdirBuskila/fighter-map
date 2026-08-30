@@ -137,7 +137,7 @@ export default async function PlacePage({ params }: Params) {
           target="_blank"
           rel="noreferrer"
         >
-          פתיחה בגוגל מפות
+          {hasPin ? "פתיחה בגוגל מפות" : "חיפוש בגוגל מפות"}
         </a>
         {place.phone && (
           <a className="btn tap px-4" href={telHref(place.phone)}>
@@ -155,6 +155,14 @@ export default async function PlacePage({ params }: Params) {
           </a>
         )}
       </nav>
+
+      {!hasPin && !place.is_chain && !place.is_online && (
+        <p className="mt-6 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>
+          את המקום הזה לא הצלחנו לסמן על המפה, אז הכפתור למעלה פותח חיפוש בגוגל
+          מפות לפי השם והעיר. אם מצאתם אותו, אפשר להוסיף אותו עם קישור מגוגל
+          מפות ולסמן אותו לכולם.
+        </p>
+      )}
 
       {place.is_chain && (
         <p className="mt-6 text-ink-soft" style={{ fontSize: "var(--text-sm)" }}>

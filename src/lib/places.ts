@@ -54,13 +54,23 @@ export async function fetchMappedPlaces(): Promise<Place[]> {
 }
 
 /**
- * Chains and online services, which have no coordinates and so never appear in
- * the map queries. Chains render as a single card; tapping one searches for
- * branches near the reader without ever storing the result.
+ * Everything the map cannot draw.
+ *
+ * Three kinds of row end up here, and they are not the same thing. A chain has
+ * no single point by nature; an online shop has no point at all; and a
+ * physical place marked `pin_unavailable` has a real doorway that neither
+ * geocoder could find. All three are still worth listing, because the reader's
+ * question is "does the card work here", and the place page answers that
+ * without a pin -- `googleMapsUrl()` falls back to a search by name and town.
+ *
+ * `places_all` filters `location is not null`, so none of these can leak onto
+ * the map however they are flagged.
  */
 export async function fetchUnmappedPlaces(): Promise<Place[]> {
   if (!supabaseConfigured) {
-    return (await localSeed()).filter((p) => p.is_chain || p.is_online);
+    return (await localSeed()).filter(
+      (p) => p.is_chain || p.is_online || p.lat == null,
+    );
   }
   const { data, error } = await serverClient()
     .from("places")
@@ -71,7 +81,7 @@ export async function fetchUnmappedPlaces(): Promise<Place[]> {
         " report_count, first_reported_at, last_confirmed_at",
     )
     .in("status", ["published", "reported_not_working"])
-    .or("is_chain.eq.true,is_online.eq.true")
+    .or("is_chain.eq.true,is_online.eq.true,location.is.null")
     .order("name_he");
 
   if (error) {

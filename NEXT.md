@@ -1,8 +1,12 @@
 # Where this is up to
 
-Migrations 0001 to 0005 are applied to the production database, and
+Migrations 0001 to 0006 are applied to the production database, and
 everything resting on them is committed and deployed. Turnstile is still open,
 and so is a queue of 20 pins that predate a fix described below.
+
+**The /admin backlog is gone.** It was 482 places; it is now 6. They were not
+pinned — they were published without a pin, which is a different and better
+answer. See "A place we cannot pin" below.
 
 Migration 0005 **is** applied — that was checked directly rather than assumed,
 by calling the function it adds:
@@ -96,6 +100,40 @@ Two smaller things that fix would not catch, both still open:
   `place` and `landuse` features; `03b_locate_remote.py` never did, which is
   how a street named לביא became a candidate for a clothes shop in מודיעין.
 
+## A place we cannot pin
+
+`places_published_needs_pin` used to require a physical place to carry a point
+before it could be published, which was right: publishing a row whose location
+nobody has checked is how a place ends up on the map in the wrong building.
+The cost was that 482 real places, whose details reservists had written down,
+were invisible because a geocoder could not find a doorway.
+
+Migration 0006 adds `pin_unavailable`, and the constraint now accepts it. It
+means *somebody looked and it cannot be located*, as against a pending row
+without it, which still means *nobody has looked yet*. `scripts/08_publish_unpinned.py`
+set it on 476 rows.
+
+Nothing about the map changed. `places_all` and `places_near` both filter
+`location is not null`, so a pinless row cannot reach the map however the flag
+is set, and `place_by_id` never filtered on location, so those pages already
+worked. The read side needed no new column either — `lat is null` is what the
+UI keys on — which is why the three RPCs and the 23-field `Place` contract are
+untouched.
+
+What makes it work is `searchTerms()` in `src/lib/format.ts`. Without a point,
+`googleMapsUrl()` searches Maps for the business, and the query has to be
+specific enough to land: "קמיליון" is a word, "קמיליון תל אביב" is a shop. It
+adds the town and the street, and skips the town when the name or address
+already carries it — Israeli branch names carry their town constantly, and
+"אושיקה מעלה אדומים מעלה אדומים" is a worse query than the name alone.
+
+That work also turned up a live bug in the *pinned* path: the URL appended
+`&query=<name>` after the coordinates, and a repeated query parameter resolves
+to the last one, so every pinned place opened as a name search and discarded
+the point we had geocoded for it. `npm run urls` holds both halves down.
+
+The site went from 526 published places to 1003.
+
 ## How contribution works
 
 - there are **two ways in**. The OpenStreetMap typeahead is still first,
@@ -153,11 +191,13 @@ select position('cur_source' in prosrc) > 0 as new_trust_rule
   section J holds it down with the AWS metadata address and a
   `goo.gl.evil.example` lookalike
 
-- 206 of 673 imported places have coordinates. OSM does not know most small
-  Israeli businesses. The other 425 sit in `/admin`, where a moderator can
-  search and pin one in a few seconds. Chipping at that queue is still the
-  single best way to make the map denser, and it is now the only way the
-  places whose town the index cannot resolve will ever get a pin.
+- 271 places have coordinates and are on the map. OSM does not know most
+  small Israeli businesses, and both geocoding passes had already given up on
+  the rest, so pinning them by hand was the only route left and nobody was
+  going to walk it. They are published without a pin instead: they appear in
+  the list and their page opens a Google Maps *search* for the name and town.
+  Pinning one is still worth doing — a pin is what puts it on the map — but it
+  is no longer what stands between a place and being useful.
 - `npm run smoke` drives a real browser, desktop and mobile, 24 checks locally
   and 17 against production, where the map internals are not exposed. Three of
   the worst bugs here were invisible to every other suite, the most recent
