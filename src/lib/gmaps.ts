@@ -27,6 +27,12 @@ export type GoogleMapsParse =
   | { kind: "pin"; pin: GoogleMapsPin }
   | { kind: "needs_expanding"; url: string }
   | { kind: "no_position"; providerRef: string }
+  /** A Google *Search* page: at best an id and a name, never a point.
+   *  Separate from no_position because the two need different instructions,
+   *  and giving the wrong one is what sends a contributor away. Both halves
+   *  are nullable — a search page Google has no listing for still needs the
+   *  same answer, which is "you are on Search, the link lives in Maps". */
+  | { kind: "search_share"; providerRef: string | null; name: string | null }
   | { kind: "outside_israel"; lat: number; lng: number }
   | { kind: "not_a_map_link" };
 
@@ -34,7 +40,8 @@ export type GoogleMapsParse =
 // knowing what it expands to: a Google *Search* page carrying a
 // knowledge-graph id and no coordinates at all, not a Maps URL. It still
 // belongs here, because recognising it is what turns "this is not a map link"
-// into "open it in Maps and copy the address bar", which a person can act on.
+// into a `search_share`, which names the business and can be answered with an
+// instruction that matches the page the sharer is actually looking at.
 const SHORT_HOSTS = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "share.google"]);
 
 /** google.com, google.co.il, maps.google.com, maps.google.co.il. */
@@ -141,24 +148,26 @@ function identity(url: URL): string | null {
   return null;
 }
 
-function suggestedName(url: URL): string | null {
-  const segment = url.pathname.match(PLACE_SEGMENT)?.[1];
-  if (!segment) return null;
-
-  let text: string;
-  try {
-    text = decodeURIComponent(segment.replace(/\+/g, " "))
-      .replace(BIDI_CONTROLS, "")
-      .trim();
-  } catch {
-    return null;
-  }
-  // A dropped pin puts the position in the name slot. Offering "31°48'01.8"N"
-  // as the shop's name is worse than offering nothing.
+/** A name slot is not a name until it is checked. A dropped pin puts the
+ *  position there, and offering "31°48'01.8"N" as the shop's name is worse
+ *  than offering nothing. */
+function cleanName(raw: string | null): string | null {
+  if (raw === null) return null;
+  const text = raw.replace(BIDI_CONTROLS, "").trim();
   if (!text || COORD_TEXT.test(text) || DMS_TEXT.test(text) || PLUS_CODE.test(text)) {
     return null;
   }
   return text.slice(0, 160);
+}
+
+function suggestedName(url: URL): string | null {
+  const segment = url.pathname.match(PLACE_SEGMENT)?.[1];
+  if (!segment) return null;
+  try {
+    return cleanName(decodeURIComponent(segment.replace(/\+/g, " ")));
+  } catch {
+    return null;
+  }
 }
 
 export function inIsrael(lat: number, lng: number): boolean {
@@ -179,6 +188,23 @@ export function parseGoogleMapsUrl(input: string): GoogleMapsParse {
   }
 
   const providerRef = identity(url);
+
+  // Answered before position, because on /search the q= parameter is what
+  // somebody typed into Google, not a place: reading it the way a Maps link's
+  // q= is read turns a search for "31.8,35.3" into a pin in a field. A search
+  // page never carries a position anyway, so there is nothing to lose here.
+  //
+  // Not conditional on finding an id. Whether Google happened to attach a
+  // kgmid to this particular share is not something the person pasting it can
+  // see or influence, and it does not change what they have to do next.
+  if (url.pathname === "/search") {
+    return {
+      kind: "search_share",
+      providerRef,
+      name: cleanName(url.searchParams.get("q")),
+    };
+  }
+
   const point = position(url);
 
   if (!point) {

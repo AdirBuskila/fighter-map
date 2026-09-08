@@ -109,6 +109,30 @@ async function reverse(
   }
 }
 
+/**
+ * The way out of a Chrome share link.
+ *
+ * A Google Search share names the business and cannot say where it is, and no
+ * amount of fetching fixes that: every Maps URL built from a knowledge-graph
+ * id renders client-side, so the page a server gets back is centred on the
+ * country, not the shop. Only the paid Places API resolves one, and this
+ * project does not have it.
+ *
+ * So the answer is not a coordinate, it is a shorter walk to a link that
+ * works. `?api=1` is Google's documented, stable URL form, and on a phone it
+ * opens the Maps app rather than the web page — which is the whole point,
+ * because Share in the Maps app produces exactly the maps.app.goo.gl link
+ * this route can already read. Without a name there is nothing to search for
+ * and the link is not offered.
+ */
+function mapsSearchUrl(name: string | null): string | null {
+  if (!name) return null;
+  const url = new URL("https://www.google.com/maps/search/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("query", name);
+  return url.href;
+}
+
 function pinResponse(pin: GoogleMapsPin, city: string | null, address: string | null) {
   return Response.json({
     lat: pin.lat,
@@ -146,6 +170,23 @@ export async function GET(request: Request) {
   }
   if (parsed.kind === "outside_israel") {
     return jsonError("הקישור מצביע על מקום מחוץ לישראל. המפה מכסה רק מקומות בארץ", 400);
+  }
+  // Chrome's share sheet shares the *page*, and somebody who found the shop
+  // by searching Google was never on Maps at all. Telling them to copy the
+  // address bar of a Maps page they are not looking at is why this arrived as
+  // "I pasted the link and nothing happened", so name what they have and hand
+  // them the one tap that gets them a link this route can read.
+  if (parsed.kind === "search_share") {
+    return Response.json(
+      {
+        error:
+          "זה קישור מחיפוש גוגל ולא מגוגל מפות: הוא מזהה את בית העסק אבל לא איפה הוא. " +
+          "פתחו את בית העסק בגוגל מפות, לחצו שם על שיתוף, והדביקו את הקישור שמתקבל.",
+        mapsUrl: mapsSearchUrl(parsed.name),
+        name: parsed.name,
+      },
+      { status: 400 },
+    );
   }
   if (parsed.kind === "no_position") {
     return jsonError(

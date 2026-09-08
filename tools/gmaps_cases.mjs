@@ -95,9 +95,62 @@ const CASES = [
     expect: { kind: "needs_expanding", url: "https://share.google/753bK56LgELaZkH4Q" },
   },
   {
+    // Where a share.google link actually lands. Told apart from the Maps link
+    // above because the two need different instructions: "copy the address
+    // bar" is advice about Maps, and somebody following this link is looking
+    // at Search.
     name: "a search page with a knowledge-graph id identifies but does not locate",
     input: "https://www.google.com/search?kgmid=/g/11rsfh4hz9&q=%D7%92%D7%95%D7%A4%D7%A0%D7%94",
-    expect: { kind: "no_position", providerRef: "gmaps:mid/g/11rsfh4hz9" },
+    expect: { kind: "search_share", providerRef: "gmaps:mid/g/11rsfh4hz9", name: "גופנה" },
+  },
+  {
+    // Verbatim, from a report that Foot Locker at the Dead Sea could not be
+    // added: this is what share.google/qAwcto5ypCyyyP3NL expands to. The name
+    // is the only thing the page carries that is worth keeping, and it used to
+    // be dropped on the floor.
+    name: "the real Chrome share link keeps the business name",
+    input:
+      "https://www.google.com/search?sca_esv=f48afa79f283a7e3&kgmid=/g/11h64t_gs6" +
+      "&q=%D7%A4%D7%95%D7%98+%D7%9C%D7%95%D7%A7%D7%A8&shem=dlvs1&source=sh/x/loc/uni/m1/1",
+    expect: { kind: "search_share", providerRef: "gmaps:mid/g/11h64t_gs6", name: "פוט לוקר" },
+  },
+  {
+    // The other half of the same report. This one always worked, and stays
+    // here so that fixing the Search case cannot quietly break the Maps case.
+    name: "the Maps share link for the same shop is a pin",
+    input:
+      "https://www.google.com/maps/place/Foot+Locker/@31.1987168,35.3613229,17z/data=" +
+      "!3m1!4b1!4m6!3m5!1s0x1503a993ed4a29f3:0x29ec2387b06c22f6!8m2!3d31.1987122!4d35.3638978" +
+      "!16s%2Fg%2F11h64t_gs6?entry=tts",
+    expect: {
+      kind: "pin",
+      lat: 31.1987122,
+      lng: 35.3638978,
+      providerRef: "gmaps:ftid/0x1503a993ed4a29f3:0x29ec2387b06c22f6",
+      name: "Foot Locker",
+    },
+  },
+  {
+    // Whether Google attached a listing id to a given share is invisible to
+    // the person pasting it and changes nothing about what they must do next,
+    // so a search page with no id gets the same answer, minus the id.
+    name: "a search page with no knowledge-graph id is still a search share",
+    input: "https://www.google.com/search?q=%D7%A4%D7%95%D7%98+%D7%9C%D7%95%D7%A7%D7%A8",
+    expect: { kind: "search_share", providerRef: null, name: "פוט לוקר" },
+  },
+  {
+    // /maps/search is Maps and must keep going down the position path; only a
+    // bare /search is the Google Search page this branch is about.
+    name: "a maps search link is not mistaken for a Google search page",
+    input: "https://www.google.com/maps/search/?api=1&query=31.8005%2C35.3105",
+    expect: { kind: "pin", lat: 31.8005, lng: 35.3105, providerRef: null, name: null },
+  },
+  {
+    // The name slot on a search page gets the same scrubbing as the one in a
+    // /maps/place path: a pasted coordinate pair is not a shop's name.
+    name: "coordinates in the search box are not a business name",
+    input: "https://www.google.com/search?kgmid=/g/11rsfh4hz9&q=31.8005%2C35.3105",
+    expect: { kind: "search_share", providerRef: "gmaps:mid/g/11rsfh4hz9", name: null },
   },
   {
     // Google returns the listing name with a trailing U+202D. Invisible, and
@@ -160,6 +213,9 @@ for (const testCase of CASES) {
     check(`${testCase.name} / url`, got.url, want.url);
   } else if (got.kind === "no_position" && want.kind === "no_position") {
     check(`${testCase.name} / ref`, got.providerRef, want.providerRef);
+  } else if (got.kind === "search_share" && want.kind === "search_share") {
+    check(`${testCase.name} / ref`, got.providerRef, want.providerRef);
+    check(`${testCase.name} / name`, got.name, want.name);
   } else if (got.kind === "outside_israel" && want.kind === "outside_israel") {
     check(`${testCase.name} / lat`, got.lat, want.lat);
     check(`${testCase.name} / lng`, got.lng, want.lng);

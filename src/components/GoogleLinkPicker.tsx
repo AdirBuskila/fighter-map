@@ -42,6 +42,10 @@ export default function GoogleLinkPicker({
   const [resolved, setResolved] = useState<Resolved | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Only a Chrome share link sets this: it is a Google Search page, which
+  // names the business but can never say where it is. The way out is a tap
+  // into Maps, not another sentence of instructions.
+  const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   // Paste, then edit, then paste again: a resolve still in flight must not
   // overwrite a newer one's answer.
   const attempt = useRef(0);
@@ -57,19 +61,25 @@ export default function GoogleLinkPicker({
       onClear();
       if (!trimmed) {
         setError(null);
+        setMapsUrl(null);
         return;
       }
       const mine = (attempt.current += 1);
       setBusy(true);
       setError(null);
+      setMapsUrl(null);
       try {
         const response = await fetch(
           `/api/resolve-link?url=${encodeURIComponent(trimmed)}`,
         );
-        const body = (await response.json()) as Resolved & { error?: string };
+        const body = (await response.json()) as Resolved & {
+          error?: string;
+          mapsUrl?: string | null;
+        };
         if (mine !== attempt.current) return;
         if (!response.ok) {
           setError(body.error ?? "לא הצלחנו לקרוא את הקישור");
+          setMapsUrl(body.mapsUrl ?? null);
           return;
         }
         setResolved(body);
@@ -150,9 +160,24 @@ export default function GoogleLinkPicker({
       </p>
 
       {error && (
-        <p role="alert" className="mt-2 text-warn" style={{ fontSize: "var(--text-sm)" }}>
-          {error}
-        </p>
+        <div role="alert" className="mt-2">
+          <p className="text-warn" style={{ fontSize: "var(--text-sm)" }}>
+            {error}
+          </p>
+          {mapsUrl && (
+            // On a phone this opens the Maps app, where Share produces the
+            // link this form can read. Two taps instead of a paragraph.
+            <a
+              className="tap mt-1 inline-block font-bold underline"
+              style={{ fontSize: "var(--text-sm)" }}
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              פתיחת בית העסק בגוגל מפות
+            </a>
+          )}
+        </div>
       )}
 
       {resolved && (
