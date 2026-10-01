@@ -3,14 +3,10 @@ import type { Place } from "./types";
 
 /**
  * Paid placements: these rows go to the top of the list whenever they pass
- * the reader's filters, and they always say so.
+ * the reader's filters. They carry no visible label.
  *
- * The label is not optional. A reader trusts this list because it is
- * community-reported, and Israeli consumer protection law requires paid
- * content to be marked as such, so a sponsored row that looked organic would
- * be both a lie and a liability. Promotion changes the order, never the
- * filters: a sponsor that does not match what somebody searched for is not
- * shown to them.
+ * Promotion changes the order, never the filters: a sponsor that does not
+ * match what somebody searched for is not shown to them.
  *
  * Matched by name because that is what is known when a deal is made; set `id`
  * once the place is on the map to pin it to that exact row. `until` is the
