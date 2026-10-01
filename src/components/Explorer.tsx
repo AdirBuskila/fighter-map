@@ -12,6 +12,7 @@ const MapView = dynamic(() => import("./MapView"), {
 });
 import { currentPosition, type LatLng } from "@/lib/geo";
 import { matchesQuery, queryWords } from "@/lib/search";
+import { sponsoredFirst } from "@/lib/sponsored";
 import type { Category, EphemeralBranch, Place } from "@/lib/types";
 
 type Props = { mapped: Place[]; unmapped: Place[] };
@@ -95,9 +96,12 @@ export default function Explorer({ mapped, unmapped }: Props) {
     [filters, words],
   );
 
-  const visibleMapped = useMemo(() => source.filter(matches), [source, matches]);
+  const visibleMapped = useMemo(
+    () => sponsoredFirst(source.filter(matches)),
+    [source, matches],
+  );
   const visibleUnmapped = useMemo(
-    () => (filters.nearMe ? [] : unmapped.filter(matches)),
+    () => (filters.nearMe ? [] : sponsoredFirst(unmapped.filter(matches))),
     [unmapped, matches, filters.nearMe],
   );
 

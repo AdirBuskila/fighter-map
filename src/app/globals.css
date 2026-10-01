@@ -429,6 +429,14 @@ label.tap {
    somebody added ten minutes ago is the best information the map has about
    that address. A dashed edge and a hollow mark say "outline, not filled in",
    which is the same thing the hollow map pin says at a glance. */
+/* Paid placement. Solid ink so it reads as a label, not a benefit colour. */
+.chip-sponsored {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
 .chip-single {
   border-style: dashed;
   border-color: var(--ink-faint);
