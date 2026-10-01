@@ -102,6 +102,9 @@ export default function PlacePicker({
         const body = (await response.json()) as { results?: Result[]; error?: string };
         if (!response.ok) {
           setError(body.error ?? "החיפוש נכשל, נסו שוב");
+          // Search being down is the same dead end as search finding
+          // nothing, and the link fallback works without it.
+          onEmpty?.(term);
           return;
         }
         const hits = body.results ?? [];

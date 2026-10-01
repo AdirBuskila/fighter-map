@@ -2,6 +2,8 @@ import { jsonError } from "@/lib/server/security";
 import {
   isGoogleUrl,
   parseGoogleMapsUrl,
+  positionFromMapsPage,
+  inIsrael,
   type GoogleMapsPin,
 } from "@/lib/gmaps";
 
@@ -70,6 +72,49 @@ async function expand(shortUrl: string): Promise<string | null> {
     }
   }
   return current === shortUrl ? null : current;
+}
+
+/**
+ * The point a Maps place page renders, for a link whose URL has none.
+ *
+ * This is what a phone share link expands to now: /maps?q=<name>&ftid=…, an
+ * id and a name and nothing else, which is why pasting the link the Maps app
+ * hands you used to end in "the link identifies the business but has no
+ * location". The page behind it does know; see positionFromMapsPage.
+ *
+ * Same narrowness as expand(): the URL has already parsed as a Google Maps
+ * host, redirects are not followed (a consent wall is a failure, not a hop),
+ * and the body is capped. The browser User-Agent is because Google serves a
+ * bare page with no preview to anything it does not recognise, and the preview
+ * is the whole point of the fetch.
+ */
+const PAGE_UA =
+  "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
+const MAX_PAGE_BYTES = 2_000_000;
+
+async function readMapsPage(
+  pageUrl: string,
+): Promise<{ lat: number; lng: number; name: string | null } | null> {
+  if (!isGoogleUrl(pageUrl)) return null;
+  try {
+    const response = await fetch(pageUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "User-Agent": PAGE_UA,
+        "Accept-Language": "he,en;q=0.8",
+        // Skip the EU consent interstitial, which would otherwise be the page.
+        Cookie: "CONSENT=YES+",
+      },
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 86400 },
+    });
+    if (!response.ok) return null;
+    const html = (await response.text()).slice(0, MAX_PAGE_BYTES);
+    return positionFromMapsPage(html);
+  } catch {
+    return null;
+  }
 }
 
 /** City and street, so a link submission is not a poorer row than a searched
@@ -189,8 +234,25 @@ export async function GET(request: Request) {
     );
   }
   if (parsed.kind === "no_position") {
+    const found = await readMapsPage(parsed.url);
+    if (found && inIsrael(found.lat, found.lng)) {
+      const { city, address } = await reverse(found.lat, found.lng);
+      return pinResponse(
+        {
+          lat: found.lat,
+          lng: found.lng,
+          providerRef: parsed.providerRef,
+          name: parsed.name ?? found.name,
+        },
+        city,
+        address,
+      );
+    }
+    if (found) {
+      return jsonError("הקישור מצביע על מקום מחוץ לישראל. המפה מכסה רק מקומות בארץ", 400);
+    }
     return jsonError(
-      "הקישור מזהה את העסק אבל בלי מיקום. פתחו אותו בגוגל מפות והעתיקו את הכתובת משורת הכתובת",
+      "הקישור מזהה את העסק אבל בלי מיקום. פתחו אותו בדפדפן, חכו שהמפה תיטען, והעתיקו את הכתובת משורת הכתובת",
       400,
     );
   }

@@ -6,7 +6,7 @@
 // Node 22 strips the types at load, so this imports src/lib/gmaps.ts directly
 // rather than duplicating the regexes into a fixture, which is the way a table
 // like this normally rots.
-import { parseGoogleMapsUrl, isGoogleShortLink } from "../src/lib/gmaps.ts";
+import { parseGoogleMapsUrl, isGoogleShortLink, positionFromMapsPage } from "../src/lib/gmaps.ts";
 
 const DESKTOP =
   "https://www.google.com/maps/place/%D7%A2%D7%9E%D7%A0%D7%95%D7%90%D7%9C+%D7%A9%D7%9C%D7%9D/" +
@@ -14,6 +14,18 @@ const DESKTOP =
   "1s0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4!8m2!3d31.8006!4d35.3107!16s%2Fg%2F11abc123";
 
 const CASES = [
+  {
+    // What a maps.app.goo.gl link from the Android Maps app expands to now.
+    name: "phone share expansion with ftid= and no position keeps id and name",
+    input:
+      "https://maps.google.com/maps?q=%D7%90%D7%9C%D7%95%D7%9E%D7%94+%D7%A4%D7%99%D7%95%D7%A8+%D7%A1%D7%A7%D7%99%D7%9F" +
+      "&ftid=0x151d4b1c2a3b4c5d:0x6e7f8091a2b3c4d5&entry=gps&g_ep=abc",
+    expect: {
+      kind: "no_position",
+      providerRef: "gmaps:ftid/0x151d4b1c2a3b4c5d:0x6e7f8091a2b3c4d5",
+      name: "אלומה פיור סקין",
+    },
+  },
   {
     name: "desktop copy-link prefers the marker over the viewport",
     input: DESKTOP,
@@ -213,6 +225,7 @@ for (const testCase of CASES) {
     check(`${testCase.name} / url`, got.url, want.url);
   } else if (got.kind === "no_position" && want.kind === "no_position") {
     check(`${testCase.name} / ref`, got.providerRef, want.providerRef);
+    if ("name" in want) check(`${testCase.name} / name`, got.name, want.name);
   } else if (got.kind === "search_share" && want.kind === "search_share") {
     check(`${testCase.name} / ref`, got.providerRef, want.providerRef);
     check(`${testCase.name} / name`, got.name, want.name);
@@ -222,6 +235,37 @@ for (const testCase of CASES) {
   }
 
   if (failed === before) console.log(`  ok    ${testCase.name}`);
+}
+
+// The page behind a no-position link: the marker is the answer, a region-wide
+// camera is not.
+const PAGES = [
+  [
+    "marker in the preview image",
+    '<meta content="https://maps.google.com/maps/api/staticmap?center=32.08%2C34.78&amp;zoom=16&amp;size=900x900&amp;markers=32.0812%2C34.7805&amp;sensor=false" property="og:image">' +
+      '<meta content="אלומה פיור סקין · רחוב 1, תל אביב" property="og:title">',
+    { lat: 32.0812, lng: 34.7805, name: "אלומה פיור סקין" },
+  ],
+  [
+    "close camera when there is no preview",
+    "<script>window.APP_INITIALIZATION_STATE=[[[1234.5,34.7805,32.0812],[0,0,0]]]</script>",
+    { lat: 32.0812, lng: 34.7805, name: null },
+  ],
+  [
+    "a country-wide camera is not a place",
+    "<script>window.APP_INITIALIZATION_STATE=[[[1500000,34.8,31.4],[0,0,0]]]</script>",
+    null,
+  ],
+  [
+    "a zoomed-out preview centre is not a place",
+    '<meta content="https://maps.google.com/maps/api/staticmap?center=31.4%2C34.8&amp;zoom=7" property="og:image">',
+    null,
+  ],
+];
+for (const [label, html, want] of PAGES) {
+  if (check(`page: ${label}`, JSON.stringify(positionFromMapsPage(html)), JSON.stringify(want))) {
+    console.log(`  ok    page: ${label}`);
+  }
 }
 
 // isGoogleShortLink gates the only outbound fetch in this feature, so it is
@@ -241,5 +285,5 @@ for (const [input, want] of SHORT) {
   }
 }
 
-console.log(failed === 0 ? `\nall ${CASES.length + SHORT.length} cases passed` : `\n${failed} failures`);
+console.log(failed === 0 ? `\nall ${CASES.length + SHORT.length + PAGES.length} cases passed` : `\n${failed} failures`);
 process.exit(failed === 0 ? 0 : 1);

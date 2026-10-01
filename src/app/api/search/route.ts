@@ -85,20 +85,32 @@ export async function GET(request: Request) {
     upstream.searchParams.set("lon", String(lng));
   }
 
-  let payload: { features?: PhotonFeature[] };
-  try {
-    const response = await fetch(upstream, {
-      headers: { "User-Agent": UA, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-      next: { revalidate: 3600 },
-    });
-    if (!response.ok) {
-      console.error("photon returned", response.status);
-      return jsonError("החיפוש לא זמין כרגע. נסו שוב בעוד רגע", 502);
+  // Photon's public instance sheds load with a 429 or a 5xx that is gone a
+  // second later, so one failure is retried before the form is told search is
+  // down. Two is the limit: this is somebody else's free service.
+  let payload: { features?: PhotonFeature[] } | null = null;
+  for (let attempt = 0; attempt < 2 && !payload; attempt += 1) {
+    if (attempt > 0) await new Promise((done) => setTimeout(done, 400));
+    try {
+      const response = await fetch(upstream, {
+        headers: { "User-Agent": UA, Accept: "application/json" },
+        signal: AbortSignal.timeout(6000),
+        next: { revalidate: 3600 },
+      });
+      if (!response.ok) {
+        console.error("photon returned", response.status);
+        continue;
+      }
+      payload = (await response.json()) as { features?: PhotonFeature[] };
+    } catch (cause) {
+      console.error("photon failed", (cause as Error)?.name);
     }
-    payload = (await response.json()) as { features?: PhotonFeature[] };
-  } catch {
-    return jsonError("החיפוש לא זמין כרגע. נסו שוב בעוד רגע", 502);
+  }
+  if (!payload) {
+    return jsonError(
+      "החיפוש לא זמין כרגע. אפשר להדביק קישור מגוגל מפות במקום",
+      502,
+    );
   }
 
   const results: SearchResult[] = [];

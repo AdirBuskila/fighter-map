@@ -26,7 +26,9 @@ export type GoogleMapsPin = {
 export type GoogleMapsParse =
   | { kind: "pin"; pin: GoogleMapsPin }
   | { kind: "needs_expanding"; url: string }
-  | { kind: "no_position"; providerRef: string }
+  /** `url` is the link itself, because the page behind it usually does know
+   *  where the place is even when the URL does not: see positionFromMapsPage. */
+  | { kind: "no_position"; providerRef: string; name: string | null; url: string }
   /** A Google *Search* page: at best an id and a name, never a point.
    *  Separate from no_position because the two need different instructions,
    *  and giving the wrong one is what sends a contributor away. Both halves
@@ -132,6 +134,13 @@ function identity(url: URL): string | null {
   const ftid = url.href.match(FTID);
   if (ftid) return `gmaps:ftid/${ftid[1].toLowerCase()}:${ftid[2].toLowerCase()}`;
 
+  // The same id as a plain parameter, which is how a phone share link
+  // expands now: /maps?q=<name>&ftid=0x…:0x…, with no position anywhere.
+  const ftidParam = url.searchParams.get("ftid")?.match(/^(0x[0-9a-f]+):(0x[0-9a-f]+)$/i);
+  if (ftidParam) {
+    return `gmaps:ftid/${ftidParam[1].toLowerCase()}:${ftidParam[2].toLowerCase()}`;
+  }
+
   const cid = url.searchParams.get("cid");
   if (cid && /^\d{1,20}$/.test(cid)) return `gmaps:cid/${cid}`;
 
@@ -168,6 +177,81 @@ function suggestedName(url: URL): string | null {
   } catch {
     return null;
   }
+}
+
+/** A link with no position has nothing in q= but the listing's name, so it
+ *  is a name here and not on a link that has a position. */
+function nameWithoutPosition(url: URL): string | null {
+  return suggestedName(url) ?? cleanName(url.searchParams.get("q"));
+}
+
+const STATIC_MAP = /https?:\/\/maps\.google(?:apis)?\.com\/maps\/api\/staticmap\?[^"'\s<>]+/;
+const PAGE_TITLE = /<meta\s+content="([^"]*)"\s+(?:property="og:title"|itemprop="name")/;
+// The camera the page opens on: [altitude in metres, lng, lat].
+const INITIAL_CAMERA = new RegExp(
+  `APP_INITIALIZATION_STATE=\\[\\[\\[(\\d+(?:\\.\\d+)?(?:e\\d+)?),(${NUM}),(${NUM})\\]`,
+);
+// Anything higher up than this is a view of a region, not of one shop.
+const MAX_CAMERA_ALTITUDE = 5000;
+
+function pair(raw: string | null): [number, number] | null {
+  // markers= may carry a style before the point: "color:red|31.8,35.3".
+  const match = raw?.split("|").pop()?.match(PAIR);
+  return match ? [Number(match[1]), Number(match[2])] : null;
+}
+
+/**
+ * Where a Google Maps place page says the place is.
+ *
+ * A phone share link expands to a URL that names the listing and carries no
+ * coordinates, and the comment on search_share is right that a page built
+ * from a knowledge-graph id knows nothing either. A *Maps* page built from a
+ * feature id is different: Google renders the preview image server-side, and
+ * that image is a static map with a marker on the listing. So the point is in
+ * the HTML even though it is not in the URL.
+ *
+ * In order of trust: the marker, then the preview's centre, then the camera
+ * the page opens on, and the last two only when they are close enough to the
+ * ground to be a shop rather than a country.
+ */
+export function positionFromMapsPage(
+  html: string,
+): { lat: number; lng: number; name: string | null } | null {
+  const text = html.replace(/&amp;/g, "&");
+  let point: [number, number] | null = null;
+
+  const preview = text.match(STATIC_MAP)?.[0];
+  if (preview) {
+    try {
+      const params = new URL(preview).searchParams;
+      point = pair(params.get("markers"));
+      if (!point && Number(params.get("zoom")) >= 14) point = pair(params.get("center"));
+    } catch {
+      point = null;
+    }
+  }
+
+  if (!point) {
+    const camera = text.match(INITIAL_CAMERA);
+    if (camera && Number(camera[1]) <= MAX_CAMERA_ALTITUDE) {
+      point = [Number(camera[3]), Number(camera[2])];
+    }
+  }
+
+  if (!point || !point.every(Number.isFinite)) return null;
+
+  let name: string | null = null;
+  const title = text.match(PAGE_TITLE)?.[1];
+  if (title) {
+    // "Name · Address" — the part before the dot is the listing.
+    name = cleanName(
+      title
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .split(" · ")[0],
+    );
+  }
+  return { lat: point[0], lng: point[1], name };
 }
 
 export function inIsrael(lat: number, lng: number): boolean {
@@ -212,7 +296,7 @@ export function parseGoogleMapsUrl(input: string): GoogleMapsParse {
     // the paid Google API turns that ref into a point, so say which of the two
     // is missing and let the caller give a usable instruction.
     return providerRef
-      ? { kind: "no_position", providerRef }
+      ? { kind: "no_position", providerRef, name: nameWithoutPosition(url), url: url.href }
       : { kind: "not_a_map_link" };
   }
 
