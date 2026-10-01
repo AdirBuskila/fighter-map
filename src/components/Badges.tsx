@@ -1,5 +1,4 @@
 import type { Place } from "@/lib/types";
-import { isSponsored } from "@/lib/sponsored";
 import {
   formatDate,
   isFresh,
@@ -30,12 +29,6 @@ export function BenefitChips({ place }: { place: Place }) {
       )}
     </>
   );
-}
-
-/** Paid placement. Always shown on a promoted row; see lib/sponsored. */
-export function SponsoredChip({ place }: { place: Place }) {
-  if (!isSponsored(place)) return null;
-  return <span className="chip chip-sponsored">ממומן</span>;
 }
 
 export function KindChip({ place }: { place: Place }) {

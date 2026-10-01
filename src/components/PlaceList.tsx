@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { BenefitChips, KindChip, SponsoredChip, LastSignalLine, StatusBadges } from "./Badges";
+import { BenefitChips, KindChip, LastSignalLine, StatusBadges } from "./Badges";
 import ChainBranches from "./ChainBranches";
 import VerdictButtons from "./VerdictButtons";
 import { formatDistance, isUnverified } from "@/lib/format";
@@ -119,7 +119,6 @@ export default function PlaceList({
                   were two, and on a phone that is a whole row of scrolling
                   spent on metadata. */}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <SponsoredChip place={place} />
                 <BenefitChips place={place} />
                 <KindChip place={place} />
                 <StatusBadges place={place} />
