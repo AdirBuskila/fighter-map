@@ -15,6 +15,16 @@ const DESKTOP =
 
 const CASES = [
   {
+    name: "bare coordinates copied from a long-press",
+    input: "32.0812, 34.7805",
+    expect: { kind: "pin", lat: 32.0812, lng: 34.7805, providerRef: null, name: null },
+  },
+  {
+    name: "bare coordinates outside Israel",
+    input: "48.8584,2.2945",
+    expect: { kind: "outside_israel", lat: 48.8584, lng: 2.2945 },
+  },
+  {
     // What a maps.app.goo.gl link from the Android Maps app expands to now.
     name: "phone share expansion with ftid= and no position keeps id and name",
     input:

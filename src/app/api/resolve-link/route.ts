@@ -92,26 +92,105 @@ const PAGE_UA =
   "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
 const MAX_PAGE_BYTES = 2_000_000;
 
-async function readMapsPage(
-  pageUrl: string,
-): Promise<{ lat: number; lng: number; name: string | null } | null> {
-  if (!isGoogleUrl(pageUrl)) return null;
-  try {
-    const response = await fetch(pageUrl, {
+async function fetchMapsPage(start: string): Promise<string | null> {
+  let current = start;
+  for (let hop = 0; hop < MAX_HOPS; hop += 1) {
+    if (!isGoogleUrl(current)) return null;
+    const response = await fetch(current, {
       method: "GET",
       redirect: "manual",
       headers: {
         "User-Agent": PAGE_UA,
         "Accept-Language": "he,en;q=0.8",
         // Skip the EU consent interstitial, which would otherwise be the page.
-        Cookie: "CONSENT=YES+",
+        Cookie: "CONSENT=YES+; SOCS=CAI",
       },
       signal: AbortSignal.timeout(6000),
       next: { revalidate: 86400 },
     });
+    const location = response.headers.get("location");
+    if (location) {
+      // Re-checked at the top of the loop, as in expand().
+      current = new URL(location, current).href;
+      continue;
+    }
+    if (!response.ok) {
+      console.error("resolve-link: maps page returned", response.status, new URL(current).host);
+      return null;
+    }
+    return (await response.text()).slice(0, MAX_PAGE_BYTES);
+  }
+  return null;
+}
+
+/** Every page that might render this listing, best first. A feature id's
+ *  second half is the listing's cid, and ?cid= is the oldest and plainest
+ *  page Google has for one. */
+function pageCandidates(pageUrl: string, providerRef: string): string[] {
+  const candidates = [pageUrl];
+  const ftid = providerRef.match(/^gmaps:ftid\/0x[0-9a-f]+:(0x[0-9a-f]+)$/);
+  const cid = ftid
+    ? BigInt(ftid[1]).toString()
+    : providerRef.match(/^gmaps:cid\/(\d+)$/)?.[1];
+  if (cid) candidates.push(`https://www.google.com/maps?cid=${cid}&hl=iw`);
+  return candidates;
+}
+
+async function readMapsPage(
+  pageUrl: string,
+  providerRef: string,
+): Promise<{ lat: number; lng: number; name: string | null } | null> {
+  for (const candidate of pageCandidates(pageUrl, providerRef)) {
+    try {
+      const html = await fetchMapsPage(candidate);
+      if (!html) continue;
+      const found = positionFromMapsPage(html);
+      if (found) return found;
+      console.error("resolve-link: no position in page", html.length, "bytes");
+    } catch (cause) {
+      console.error("resolve-link: page fetch failed", (cause as Error)?.name);
+    }
+  }
+  return null;
+}
+
+/**
+ * The listing's own address, when the link spells one out. A shared link's
+ * q= is often "<name>, <street>, <town>", and a street address is a far better
+ * pin than none. Nominatim, because it is one lookup per paste, which its
+ * policy allows, and because Photon has been the part of this app that is
+ * down. Israel only, and anything vaguer than a street is refused.
+ */
+const NOMINATIM = "https://nominatim.openstreetmap.org/search";
+
+async function geocodeAddress(text: string | null): Promise<{ lat: number; lng: number } | null> {
+  if (!text || !text.includes(",")) return null;
+  // Drop the business name; Nominatim does not know it, and it spoils the match.
+  const address = text.split(",").slice(1).join(",").trim();
+  if (address.length < 4) return null;
+  const url = new URL(NOMINATIM);
+  url.searchParams.set("q", address);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("countrycodes", "il");
+  url.searchParams.set("limit", "1");
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": UA, Accept: "application/json", "Accept-Language": "he" },
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 86400 },
+    });
     if (!response.ok) return null;
-    const html = (await response.text()).slice(0, MAX_PAGE_BYTES);
-    return positionFromMapsPage(html);
+    const hits = (await response.json()) as { lat?: string; lon?: string; type?: string; addresstype?: string }[];
+    const hit = hits[0];
+    if (!hit?.lat || !hit.lon) return null;
+    const street = hit.type === "house" ||
+      ["building", "road", "amenity", "shop", "office"].includes(hit.addresstype ?? "");
+    if (!street) {
+      return null;
+    }
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    return inIsrael(lat, lng) ? { lat, lng } : null;
   } catch {
     return null;
   }
@@ -234,7 +313,12 @@ export async function GET(request: Request) {
     );
   }
   if (parsed.kind === "no_position") {
-    const found = await readMapsPage(parsed.url);
+    const found =
+      (await readMapsPage(parsed.url, parsed.providerRef)) ??
+      (await geocodeAddress(parsed.name).then((point) =>
+        point ? { ...point, name: null } : null,
+      ));
+    if (!found) console.error("resolve-link: no position for", parsed.url);
     if (found && inIsrael(found.lat, found.lng)) {
       const { city, address } = await reverse(found.lat, found.lng);
       return pinResponse(
@@ -242,7 +326,8 @@ export async function GET(request: Request) {
           lat: found.lat,
           lng: found.lng,
           providerRef: parsed.providerRef,
-          name: parsed.name ?? found.name,
+          // q= may be "<name>, <address>"; the name is the part before the comma.
+      name: parsed.name?.split(",")[0].trim() || found.name,
         },
         city,
         address,
@@ -252,7 +337,7 @@ export async function GET(request: Request) {
       return jsonError("הקישור מצביע על מקום מחוץ לישראל. המפה מכסה רק מקומות בארץ", 400);
     }
     return jsonError(
-      "הקישור מזהה את העסק אבל בלי מיקום. פתחו אותו בדפדפן, חכו שהמפה תיטען, והעתיקו את הכתובת משורת הכתובת",
+      "גוגל לא מסר לנו את המיקום של הקישור הזה. בגוגל מפות, לחצו לחיצה ארוכה על בית העסק במפה, העתיקו את הקואורדינטות שמופיעות בשורת החיפוש (למשל 32.0812, 34.7805), והדביקו אותן כאן",
       400,
     );
   }

@@ -142,11 +142,11 @@ export default function GoogleLinkPicker({
       <input
         id={fieldId}
         className="field"
-        type="url"
+        type="text"
         inputMode="url"
         dir="ltr"
         autoComplete="off"
-        placeholder="https://maps.app.goo.gl/..."
+        placeholder="https://maps.app.goo.gl/... או 32.0812, 34.7805"
         value={link}
         onChange={(event) => {
           setLink(event.target.value);

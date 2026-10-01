@@ -265,7 +265,17 @@ export function inIsrael(lat: number, lng: number): boolean {
 
 export function parseGoogleMapsUrl(input: string): GoogleMapsParse {
   const url = firstGoogleUrl(input);
-  if (!url) return { kind: "not_a_map_link" };
+  if (!url) {
+    // Bare coordinates, which is what Google Maps shows and copies when you
+    // long-press a spot. The one path that needs nothing from Google's
+    // servers, so it is the way out when every link form fails.
+    const bare = input.match(PAIR);
+    if (!bare) return { kind: "not_a_map_link" };
+    const [lat, lng] = [Number(bare[1]), Number(bare[2])];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { kind: "not_a_map_link" };
+    if (!inIsrael(lat, lng)) return { kind: "outside_israel", lat, lng };
+    return { kind: "pin", pin: { lat, lng, providerRef: null, name: null } };
+  }
 
   if (hostKind(url.host) === "short") {
     return { kind: "needs_expanding", url: url.href };
