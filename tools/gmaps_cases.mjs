@@ -6,7 +6,12 @@
 // Node 22 strips the types at load, so this imports src/lib/gmaps.ts directly
 // rather than duplicating the regexes into a fixture, which is the way a table
 // like this normally rots.
-import { parseGoogleMapsUrl, isGoogleShortLink, positionFromMapsPage } from "../src/lib/gmaps.ts";
+import {
+  parseGoogleMapsUrl,
+  isGoogleShortLink,
+  positionFromMapsPage,
+  listingFromMapSearch,
+} from "../src/lib/gmaps.ts";
 
 const DESKTOP =
   "https://www.google.com/maps/place/%D7%A2%D7%9E%D7%A0%D7%95%D7%90%D7%9C+%D7%A9%D7%9C%D7%9D/" +
@@ -81,7 +86,7 @@ const CASES = [
   {
     name: "cid link with no position is not a pin",
     input: "https://maps.google.com/?cid=6732789012345678901",
-    expect: { kind: "no_position", providerRef: "gmaps:cid/6732789012345678901" },
+    expect: { kind: "no_position", providerRef: "gmaps:cid/6732789012345678901", name: null },
   },
   {
     name: "bare q= coordinates",
@@ -106,7 +111,26 @@ const CASES = [
   {
     name: "expanded share link with the id but no position",
     input: "https://www.google.com/maps/place//data=!4m2!3m1!1s0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4?utm_source=mstt_1",
-    expect: { kind: "no_position", providerRef: "gmaps:ftid/0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4" },
+    expect: {
+      kind: "no_position",
+      providerRef: "gmaps:ftid/0x1502b5c0e1f2a3b4:0x5d6e7f8091a2b3c4",
+      name: null,
+    },
+  },
+  {
+    // What https://maps.app.goo.gl/XFoEtW3nPDKTAKTcA expanded to, as reported
+    // in October 2026. The name is what the route searches for, so it has to
+    // survive, bidi mark and all.
+    name: "a real phone share keeps the name for the lookup",
+    input:
+      "https://www.google.com/maps/place/%D7%92%D7%9E%D7%94+%D7%93%D7%99%D7%9C,+%D7%9E%D7%A8%D7%9B%D7%96+" +
+      "%D7%A1%D7%99%D7%9C%D7%91%D7%A8,+%D7%90%D7%A9%D7%A7%D7%9C%D7%95%D7%9F%E2%80%AD/data=!4m2!3m1!" +
+      "1s0x15029bb10ac9d4d7:0x983312f312c06c3f!18m1!1e1?utm_source=mstt_1&entry=gps",
+    expect: {
+      kind: "no_position",
+      providerRef: "gmaps:ftid/0x15029bb10ac9d4d7:0x983312f312c06c3f",
+      name: "גמה דיל, מרכז סילבר, אשקלון",
+    },
   },
   {
     // share.google is what Chrome's own share sheet produces now, and it is
@@ -295,5 +319,41 @@ for (const [input, want] of SHORT) {
   }
 }
 
-console.log(failed === 0 ? `\nall ${CASES.length + SHORT.length + PAGES.length} cases passed` : `\n${failed} failures`);
+// The shape of a tbm=map response, cut down from the real one for the listing
+// above: a decoy first, with the same name and a different id, so that taking
+// the first listing instead of the matching one fails here.
+const listing = (ftid, lat, lng) => {
+  const row = Array(15).fill(null);
+  row[9] = [null, null, lat, lng];
+  row[10] = ftid;
+  row[39] = "מרכז סילבר, אשקלון";
+  row[166] = "אשקלון";
+  return [null, null, null, null, null, null, null, null, null, null, null, null, null, null, row];
+};
+const SEARCH_BODY =
+  ")]}'\n" +
+  JSON.stringify([
+    [
+      "גמה דיל",
+      [
+        listing("0x1:0x2", 32.0853, 34.7818),
+        listing("0x15029bb10ac9d4d7:0x983312f312c06c3f", 31.6748478, 34.6056682),
+      ],
+    ],
+  ]);
+const SEARCH = [
+  ["the listing whose id matches", SEARCH_BODY, "0x15029bb10ac9d4d7:0x983312f312c06c3f",
+    [31.6748478, 34.6056682, "מרכז סילבר, אשקלון", "אשקלון"]],
+  ["no listing with that id is no point, not the first one", SEARCH_BODY, "0x9:0x9", null],
+  ["a page that is not the JSON is no point", "<html>before you continue</html>", "0x1:0x2", null],
+];
+for (const [label, body, ftid, want] of SEARCH) {
+  const hit = listingFromMapSearch(body, ftid);
+  const got = JSON.stringify(hit && [hit.lat, hit.lng, hit.address, hit.city]);
+  if (check(`listingFromMapSearch: ${label}`, got, JSON.stringify(want))) {
+    console.log(`  ok    listingFromMapSearch: ${label}`);
+  }
+}
+
+console.log(failed === 0 ? `\nall ${CASES.length + SHORT.length + PAGES.length + SEARCH.length} cases passed` : `\n${failed} failures`);
 process.exit(failed === 0 ? 0 : 1);

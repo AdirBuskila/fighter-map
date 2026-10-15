@@ -26,8 +26,9 @@ export type GoogleMapsPin = {
 export type GoogleMapsParse =
   | { kind: "pin"; pin: GoogleMapsPin }
   | { kind: "needs_expanding"; url: string }
-  /** `url` is the link itself, because the page behind it usually does know
-   *  where the place is even when the URL does not: see positionFromMapsPage. */
+  /** `url` is the link itself, for the fallbacks that read the page behind
+   *  it. `name` is what /api/resolve-link searches Google for first, to find
+   *  the listing whose id matches and read its point from there. */
   | { kind: "no_position"; providerRef: string; name: string | null; url: string }
   /** A Google *Search* page: at best an id and a name, never a point.
    *  Separate from no_position because the two need different instructions,
@@ -302,9 +303,9 @@ export function parseGoogleMapsUrl(input: string): GoogleMapsParse {
   const point = position(url);
 
   if (!point) {
-    // Some share links expand to identity with no position. Nothing short of
-    // the paid Google API turns that ref into a point, so say which of the two
-    // is missing and let the caller give a usable instruction.
+    // Most phone share links now expand to exactly this: the listing's name
+    // and its feature id, no position. The parser cannot go further without a
+    // network, so it hands both to the caller, which can.
     return providerRef
       ? { kind: "no_position", providerRef, name: nameWithoutPosition(url), url: url.href }
       : { kind: "not_a_map_link" };
@@ -315,4 +316,61 @@ export function parseGoogleMapsUrl(input: string): GoogleMapsParse {
   if (!inIsrael(lat, lng)) return { kind: "outside_israel", lat, lng };
 
   return { kind: "pin", pin: { lat, lng, providerRef, name: suggestedName(url) } };
+}
+
+/** The feature id a providerRef carries, if it is one. */
+export function ftidOf(providerRef: string): string | null {
+  return providerRef.startsWith("gmaps:ftid/") ? providerRef.slice("gmaps:ftid/".length) : null;
+}
+
+/**
+ * One listing, out of a Google Maps search response.
+ *
+ * The body is what www.google.com/search?tbm=map returns: a JSON tree behind
+ * an XSSI prefix, in which every listing is an array carrying its position as
+ * [null, null, lat, lng] at index 9 and its feature id at index 10, with the
+ * street address at 39 and the town at 166. The tree around it moves between
+ * releases, so this walks it for that shape rather than trusting a fixed path,
+ * and the address and town are extras that may come back null.
+ *
+ * Matching on the feature id is the whole safety argument. The search is by
+ * name, and a name can find a different branch or a different shop; the id
+ * cannot. No match is a null, never a best guess.
+ */
+export type MapSearchListing = {
+  lat: number;
+  lng: number;
+  address: string | null;
+  city: string | null;
+};
+
+export function listingFromMapSearch(body: string, ftid: string): MapSearchListing | null {
+  let tree: unknown;
+  try {
+    tree = JSON.parse(body.replace(/^\)\]\}'\s*/, ""));
+  } catch {
+    return null;
+  }
+  const want = ftid.toLowerCase();
+  const stack: unknown[] = [tree];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!Array.isArray(node)) continue;
+    const at = node[9];
+    if (
+      typeof node[10] === "string" &&
+      node[10].toLowerCase() === want &&
+      Array.isArray(at) &&
+      typeof at[2] === "number" &&
+      typeof at[3] === "number"
+    ) {
+      const text = (value: unknown) =>
+        typeof value === "string" && value.trim()
+          ? value.replace(BIDI_CONTROLS, "").trim().slice(0, 200)
+          : null;
+      return { lat: at[2], lng: at[3], address: text(node[39]), city: text(node[166]) };
+    }
+    for (const child of node) if (Array.isArray(child)) stack.push(child);
+  }
+  return null;
 }

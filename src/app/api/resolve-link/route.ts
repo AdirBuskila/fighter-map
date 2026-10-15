@@ -1,10 +1,13 @@
 import { jsonError } from "@/lib/server/security";
 import {
+  ftidOf,
+  inIsrael,
   isGoogleUrl,
   parseGoogleMapsUrl,
+  listingFromMapSearch,
   positionFromMapsPage,
-  inIsrael,
   type GoogleMapsPin,
+  type MapSearchListing,
 } from "@/lib/gmaps";
 
 /**
@@ -31,6 +34,12 @@ import {
 
 const MAX_HOPS = 4;
 const PHOTON_REVERSE = "https://photon.komoot.io/reverse";
+const MAP_SEARCH = "https://www.google.com/search";
+// The viewport the search runs in: all of Israel. Google otherwise ranks by
+// where the request comes from, and this server is not in Israel. The name in
+// a share link usually carries the town anyway, so this is the cheap insurance
+// for the one that does not.
+const ISRAEL_VIEWPORT = "!4m12!1m3!1d600000!2d34.9!3d31.5!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1";
 const UA = "fighter-map/1.0 (community benefit map for Israeli reservists)";
 
 async function expand(shortUrl: string): Promise<string | null> {
@@ -196,6 +205,44 @@ async function geocodeAddress(text: string | null): Promise<{ lat: number; lng: 
   }
 }
 
+/**
+ * Where a listing is, given its name and feature id.
+ *
+ * Almost every phone share link now expands to a place URL with no position
+ * in it, only the listing's name and id. The Maps page for that URL is no help
+ * to a server (it renders client-side and comes back centred on the
+ * requester), but Google Maps' own search endpoint returns listings as data,
+ * position included, with no key. So: search for the name, then take the
+ * point of the listing whose id is the one in the link. Same answer the
+ * person saw in the app, and the id match means a near-namesake cannot be
+ * mistaken for it.
+ *
+ * Undocumented, so it can change. Every failure is a null, and a null falls
+ * through to the page read and the address geocode below, which is the most
+ * this can ever cost.
+ */
+async function locate(name: string, ftid: string): Promise<MapSearchListing | null> {
+  const url = new URL(MAP_SEARCH);
+  url.searchParams.set("tbm", "map");
+  url.searchParams.set("hl", "iw");
+  url.searchParams.set("gl", "il");
+  url.searchParams.set("pb", ISRAEL_VIEWPORT);
+  url.searchParams.set("q", name);
+
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": UA },
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 86400 },
+    });
+    if (!response.ok) return null;
+    const listing = listingFromMapSearch(await response.text(), ftid);
+    return listing && inIsrael(listing.lat, listing.lng) ? listing : null;
+  } catch {
+    return null;
+  }
+}
+
 /** City and street, so a link submission is not a poorer row than a searched
  *  one. Photon is already this project's geocoder. Failure is not fatal. */
 async function reverse(
@@ -313,6 +360,25 @@ export async function GET(request: Request) {
     );
   }
   if (parsed.kind === "no_position") {
+    const ftid = ftidOf(parsed.providerRef);
+    const listing = ftid && parsed.name ? await locate(parsed.name, ftid) : null;
+    if (listing) {
+      const pin = {
+        lat: listing.lat,
+        lng: listing.lng,
+        providerRef: parsed.providerRef,
+        // q= may be "<name>, <address>"; the name is the part before the comma.
+        name: parsed.name?.split(",")[0].trim() || null,
+      };
+      // Google's own address and town for the listing, when it gave them;
+      // the reverse geocoder only fills what is missing.
+      const fallback = listing.city ? null : await reverse(pin.lat, pin.lng);
+      return pinResponse(
+        pin,
+        listing.city ?? fallback?.city ?? null,
+        listing.address ?? fallback?.address ?? null,
+      );
+    }
     const found =
       (await readMapsPage(parsed.url, parsed.providerRef)) ??
       (await geocodeAddress(parsed.name).then((point) =>
@@ -327,7 +393,7 @@ export async function GET(request: Request) {
           lng: found.lng,
           providerRef: parsed.providerRef,
           // q= may be "<name>, <address>"; the name is the part before the comma.
-      name: parsed.name?.split(",")[0].trim() || found.name,
+          name: parsed.name?.split(",")[0].trim() || found.name,
         },
         city,
         address,
